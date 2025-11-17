@@ -203,8 +203,8 @@ def scrape_mercado_livre(url, capturar_screenshots=True):
                                         continue
                                 
                                 # Padrão 3: Elemento com classe de rótulo e valor
-                                text = element.text.strip()
-                                if ": " in text or ":" in text:
+                                text = element.text.strip() if element.text else ""
+                                if text and (": " in text or ":" in text):
                                     partes = text.split(":", 1)
                                     if len(partes) == 2:
                                         chave = partes[0].strip()
