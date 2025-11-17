@@ -12,9 +12,6 @@ from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.chrome.service import Service
 import time
 import json
-import re
-import os
-from datetime import datetime
 
 def scrape_mercado_livre(url, capturar_screenshots=True):
     """
@@ -22,10 +19,10 @@ def scrape_mercado_livre(url, capturar_screenshots=True):
     
     Args:
         url (str): URL do produto no Mercado Livre
-        capturar_screenshots (bool): Se True, captura screenshots durante o scraping
+        capturar_screenshots (bool): Parâmetro aceito mas ignorado por enquanto
         
     Returns:
-        dict: Dicionário com os dados extraídos do produto (inclui caminho das screenshots se capturadas)
+        dict: Dicionário com os dados extraídos do produto
     """
     
     # Configurar opções do Chrome para modo headless
@@ -39,15 +36,6 @@ def scrape_mercado_livre(url, capturar_screenshots=True):
     chrome_options.add_argument("--start-maximized")
     chrome_options.add_argument("--window-size=1920,1080")
     
-    # Criar diretório para screenshots se necessário
-    screenshots_dir = "screenshots"
-    if capturar_screenshots and not os.path.exists(screenshots_dir):
-        os.makedirs(screenshots_dir)
-        print(f"[INFO] Diretório '{screenshots_dir}' criado")
-    
-    # Timestamp para identificar a execução
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    
     # Inicializar o driver
     service = Service(ChromeDriverManager().install())
     driver = webdriver.Chrome(service=service, options=chrome_options)
@@ -58,8 +46,7 @@ def scrape_mercado_livre(url, capturar_screenshots=True):
         "bullet_points": [],
         "caracteristicas": {},
         "cor": "N/A",
-        "descricao": "N/A",
-        "screenshots": {}
+        "descricao": "N/A"
     }
     
     try:
@@ -69,29 +56,14 @@ def scrape_mercado_livre(url, capturar_screenshots=True):
         # Aguardar carregamento do título principal
         wait = WebDriverWait(driver, 10)
         
-        # Capturar screenshot da página completa no início
-        if capturar_screenshots:
-            screenshot_path = os.path.join(screenshots_dir, f"{timestamp}_01_pagina_completa.png")
-            driver.save_screenshot(screenshot_path)
-            dados_produto["screenshots"]["pagina_completa"] = screenshot_path
-            print(f"[OK] Screenshot da página capturado: {screenshot_path}")
-        
         # ===== EXTRAIR TÍTULO =====
         try:
             print("[INFO] Extraindo título...")
             titulo_element = wait.until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, "h1.ui-pdp-title"))
             )
-            titulo_text = titulo_element.text.strip() if titulo_element.text else "N/A"
-            dados_produto["titulo"] = titulo_text
+            dados_produto["titulo"] = titulo_element.text.strip()
             print(f"[OK] Título encontrado: {dados_produto['titulo'][:50]}...")
-            
-            # Capturar screenshot do título
-            if capturar_screenshots:
-                screenshot_path = os.path.join(screenshots_dir, f"{timestamp}_02_titulo.png")
-                titulo_element.screenshot(screenshot_path)
-                dados_produto["screenshots"]["titulo"] = screenshot_path
-                print(f"[OK] Screenshot do título capturado: {screenshot_path}")
         except (TimeoutException, NoSuchElementException) as e:
             print(f"[AVISO] Não foi possível extrair o título: {e}")
         
@@ -101,195 +73,101 @@ def scrape_mercado_livre(url, capturar_screenshots=True):
         # ===== EXTRAIR BULLET POINTS =====
         try:
             print("[INFO] Extraindo bullet points...")
-            
-            # Procurar especificamente na seção de highlights/vantagens
+            # Procurar por bullet points em diferentes seletores possíveis
             bullet_selectors = [
-                "span[class*='highlight']",
-                "div[class*='highlight'] span",
-                "li[class*='highlight']",
-                "div.ui-pdp-highlights li",
                 "ul.andes-list li",
-                "ul li span",
-                "li[role='listitem']",
-                "div[class*='feature'] span"
+                ".ui-pdp-highlights li",
+                ".ui-pdp-description ul li",
+                "li[role='listitem']"
             ]
-            
-            found_bullets = set()  # Usar set para evitar duplicatas
             
             for selector in bullet_selectors:
                 try:
-                    elements = driver.find_elements(By.CSS_SELECTOR, selector)
-                    if elements and len(elements) > 0:
-                        for element in elements:
-                            try:
-                                text = element.text.strip() if element.text else ""
-                                if text and len(text) > 5 and len(text) < 500:  # Filtrar textos válidos
-                                    found_bullets.add(text)
-                            except:
-                                continue
-                        
-                        if found_bullets:
-                            print(f"[OK] Bullet points encontrados com seletor: {selector}")
+                    bullets = driver.find_elements(By.CSS_SELECTOR, selector)
+                    if bullets and len(bullets) > 0:
+                        for bullet in bullets:
+                            text = bullet.text.strip()
+                            if text and len(text) > 0:
+                                dados_produto["bullet_points"].append(text)
+                        if dados_produto["bullet_points"]:
+                            print(f"[OK] {len(dados_produto['bullet_points'])} bullet points encontrados")
                             break
                 except NoSuchElementException:
                     continue
             
-            dados_produto["bullet_points"] = list(found_bullets)
-            
-            if dados_produto["bullet_points"]:
-                print(f"[OK] {len(dados_produto['bullet_points'])} bullet points encontrados")
-                
-                # Capturar screenshot dos bullet points
-                if capturar_screenshots:
-                    try:
-                        for selector in bullet_selectors:
-                            try:
-                                highlight_elem = driver.find_element(By.CSS_SELECTOR, selector)
-                                screenshot_path = os.path.join(screenshots_dir, f"{timestamp}_03_bullet_points.png")
-                                highlight_elem.screenshot(screenshot_path)
-                                dados_produto["screenshots"]["bullet_points"] = screenshot_path
-                                print(f"[OK] Screenshot dos bullet points capturado: {screenshot_path}")
-                                break
-                            except:
-                                continue
-                    except Exception as e:
-                        print(f"[AVISO] Não foi possível capturar screenshot dos bullet points: {e}")
-            else:
+            if not dados_produto["bullet_points"]:
                 print("[AVISO] Nenhum bullet point encontrado")
-                
         except Exception as e:
             print(f"[AVISO] Erro ao extrair bullet points: {e}")
         
         # ===== EXTRAIR CARACTERÍSTICAS/ESPECIFICAÇÕES =====
         try:
             print("[INFO] Extraindo características...")
-            
-            # Procurar por elementos de especificação
-            spec_selectors = [
-                "div[class*='attribute-row']",
-                "div[class*='attribute']",
-                "div.ui-pdp-specs",
-                "table.andes-table tbody tr",
-                "div[data-spec-name]",
-                "div[class*='spec']",
-                "li[class*='attribute']"
-            ]
-            
+            # Procurar pela tabela de especificações
             specs_found = False
+            
+            # Tenta encontrar a tabela de especificações
+            spec_selectors = [
+                "table.andes-table tbody tr",
+                ".ui-pdp-specs table tbody tr",
+                ".ui-pdp-specification tbody tr",
+                "tr[data-spec-name]"
+            ]
             
             for selector in spec_selectors:
                 try:
-                    spec_elements = driver.find_elements(By.CSS_SELECTOR, selector)
-                    
-                    if spec_elements and len(spec_elements) > 0:
-                        for element in spec_elements:
+                    spec_rows = driver.find_elements(By.CSS_SELECTOR, selector)
+                    if spec_rows and len(spec_rows) > 0:
+                        for row in spec_rows:
                             try:
-                                # Tentar diferentes padrões de chave-valor
-                                
-                                # Padrão 1: dois td/spans em sequência
-                                cells = element.find_elements(By.TAG_NAME, "td")
+                                # Tentar extrair chave e valor
+                                cells = row.find_elements(By.TAG_NAME, "td")
                                 if len(cells) >= 2:
-                                    chave = cells[0].text.strip() if cells[0].text else ""
-                                    valor = cells[1].text.strip() if cells[1].text else ""
+                                    chave = cells[0].text.strip()
+                                    valor = cells[1].text.strip()
                                     if chave and valor:
                                         dados_produto["caracteristicas"][chave] = valor
                                         specs_found = True
-                                        continue
-                                
-                                # Padrão 2: Chave e valor em spans dentro de divs
-                                spans = element.find_elements(By.TAG_NAME, "span")
-                                if len(spans) >= 2:
-                                    chave = spans[0].text.strip() if spans[0].text else ""
-                                    valor = spans[1].text.strip() if (spans[1].text and len(spans) > 1) else ""
-                                    if chave and valor and not chave.endswith(":"):
-                                        dados_produto["caracteristicas"][chave] = valor
-                                        specs_found = True
-                                        continue
-                                
-                                # Padrão 3: Elemento com classe de rótulo e valor
-                                try:
-                                    text = element.text.strip() if element.text else ""
-                                    if text and (": " in text or ":" in text):
-                                        try:
-                                            partes = text.split(":", 1)
-                                            if len(partes) == 2:
-                                                chave = partes[0].strip()
-                                                valor = partes[1].strip()
-                                                if chave and valor:
-                                                    dados_produto["caracteristicas"][chave] = valor
-                                                    specs_found = True
-                                        except Exception as split_error:
-                                            print(f"[AVISO] Erro ao fazer split: {split_error}, text: {repr(text)}")
-                                            continue
-                                except Exception as pattern3_error:
-                                    print(f"[AVISO] Erro no padrão 3: {pattern3_error}")
-                                    continue
-                                
-                            except (StaleElementReferenceException, NoSuchElementException):
+                            except StaleElementReferenceException:
                                 continue
                         
                         if specs_found:
-                            print(f"[OK] Características encontradas com seletor: {selector}")
-                            print(f"[OK] {len(dados_produto['caracteristicas'])} características extraídas")
-                            
-                            # Capturar screenshot das características
-                            if capturar_screenshots:
-                                try:
-                                    spec_container = driver.find_element(By.CSS_SELECTOR, selector)
-                                    screenshot_path = os.path.join(screenshots_dir, f"{timestamp}_04_caracteristicas.png")
-                                    spec_container.screenshot(screenshot_path)
-                                    dados_produto["screenshots"]["caracteristicas"] = screenshot_path
-                                    print(f"[OK] Screenshot das características capturado: {screenshot_path}")
-                                except Exception as e:
-                                    print(f"[AVISO] Não foi possível capturar screenshot das características: {e}")
+                            print(f"[OK] {len(dados_produto['caracteristicas'])} características encontradas")
                             break
-                            
                 except NoSuchElementException:
                     continue
             
             if not specs_found:
-                print("[AVISO] Nenhuma característica encontrada")
-                
+                print("[AVISO] Nenhuma característica encontrada em tabelas")
         except Exception as e:
             print(f"[AVISO] Erro ao extrair características: {e}")
         
         # ===== EXTRAIR COR =====
         try:
             print("[INFO] Extraindo cor...")
-            
             cor_selectors = [
-                "span[class*='Color']",
                 "span[class*='color']",
-                "div[class*='attribute'] span:nth-child(2)",
-                "li[class*='color'] span",
-                "div[data-attribute-name='color'] span",
-                "button[class*='color']"
+                "div[class*='color'] span",
+                ".ui-pdp-color-picker span",
+                "div[data-color] span"
             ]
             
             for selector in cor_selectors:
                 try:
-                    elementos = driver.find_elements(By.CSS_SELECTOR, selector)
-                    for element in elementos:
-                        try:
-                            text = element.text.strip() if element.text else ""
-                            # Filtrar por comprimento e evitar números de desconto
-                            if text and 1 < len(text) < 50 and not text.endswith("%") and not re.match(r'^\d+%', text):
-                                # Verificar se não é um valor de desconto ou percentual
-                                if "%" not in text:
-                                    dados_produto["cor"] = text
-                                    print(f"[OK] Cor encontrada: {text}")
-                                    break
-                        except:
-                            continue
-                    
+                    cor_elements = driver.find_elements(By.CSS_SELECTOR, selector)
+                    for element in cor_elements:
+                        text = element.text.strip()
+                        if text and len(text) > 0 and len(text) < 50:  # Assumindo que cor tem texto curto
+                            dados_produto["cor"] = text
+                            print(f"[OK] Cor encontrada: {text}")
+                            break
                     if dados_produto["cor"] != "N/A":
                         break
                 except NoSuchElementException:
                     continue
             
             if dados_produto["cor"] == "N/A":
-                print("[AVISO] Cor não encontrada como campo explícito")
-                
+                print("[AVISO] Cor não encontrada")
         except Exception as e:
             print(f"[AVISO] Erro ao extrair cor: {e}")
         
@@ -301,17 +179,19 @@ def scrape_mercado_livre(url, capturar_screenshots=True):
             # Primeiro, tentar extrair de iframe
             try:
                 print("[INFO] Procurando por descrição em iframe...")
+                # Procurar por iframes
                 iframes = driver.find_elements(By.TAG_NAME, "iframe")
                 print(f"[INFO] {len(iframes)} iframe(s) encontrado(s)")
                 
                 for idx, iframe in enumerate(iframes):
                     try:
                         driver.switch_to.frame(iframe)
-                        print(f"[INFO] Analisando iframe {idx}...")
+                        print(f"[INFO] Trocando para iframe {idx}...")
                         
+                        # Tentar extrair texto do iframe
                         try:
                             descricao_element = driver.find_element(By.CSS_SELECTOR, "body")
-                            descricao = descricao_element.text.strip() if descricao_element.text else ""
+                            descricao = descricao_element.text.strip()
                             if descricao and len(descricao) > 20:
                                 print(f"[OK] Descrição encontrada em iframe: {len(descricao)} caracteres")
                                 break
@@ -320,76 +200,37 @@ def scrape_mercado_livre(url, capturar_screenshots=True):
                         
                         driver.switch_to.default_content()
                     except Exception as e:
-                        try:
-                            driver.switch_to.default_content()
-                        except:
-                            pass
+                        driver.switch_to.default_content()
                         continue
-                        
             except Exception as e:
                 print(f"[AVISO] Erro ao processar iframes: {e}")
-                try:
-                    driver.switch_to.default_content()
-                except:
-                    pass
+                driver.switch_to.default_content()
             
             # Se não encontrou em iframe, tentar em divs na página
             if not descricao or len(descricao) < 20:
                 try:
                     print("[INFO] Procurando por descrição em elementos da página...")
                     desc_selectors = [
-                        "div[class*='description']",
                         ".ui-pdp-description",
+                        "div[class*='description']",
                         ".ui-pdp-long-description",
-                        "div[data-description]",
-                        "article[class*='description']",
-                        "section[class*='description']"
+                        "div[data-description]"
                     ]
                     
                     for selector in desc_selectors:
                         try:
-                            desc_elements = driver.find_elements(By.CSS_SELECTOR, selector)
-                            for element in desc_elements:
-                                try:
-                                    text = element.text.strip() if element.text else ""
-                                    if text and len(text) > 20:
-                                        descricao = text
-                                        print(f"[OK] Descrição encontrada: {len(descricao)} caracteres")
-                                        break
-                                except:
-                                    continue
-                            
-                            if descricao and len(descricao) > 20:
+                            desc_element = driver.find_element(By.CSS_SELECTOR, selector)
+                            text = desc_element.text.strip()
+                            if text and len(text) > 20:
+                                descricao = text
+                                print(f"[OK] Descrição encontrada: {len(descricao)} caracteres")
                                 break
-                                
                         except NoSuchElementException:
                             continue
                 except Exception as e:
                     print(f"[AVISO] Erro ao procurar descrição em elementos: {e}")
             
             dados_produto["descricao"] = descricao if descricao else "N/A"
-            
-            # Capturar screenshot da descrição
-            if capturar_screenshots and dados_produto["descricao"] != "N/A":
-                try:
-                    desc_selectors_screenshot = [
-                        "div[class*='description']",
-                        ".ui-pdp-description",
-                        ".ui-pdp-long-description",
-                        "article[class*='description']"
-                    ]
-                    for selector in desc_selectors_screenshot:
-                        try:
-                            desc_elem = driver.find_element(By.CSS_SELECTOR, selector)
-                            screenshot_path = os.path.join(screenshots_dir, f"{timestamp}_05_descricao.png")
-                            desc_elem.screenshot(screenshot_path)
-                            dados_produto["screenshots"]["descricao"] = screenshot_path
-                            print(f"[OK] Screenshot da descrição capturado: {screenshot_path}")
-                            break
-                        except:
-                            continue
-                except Exception as e:
-                    print(f"[AVISO] Não foi possível capturar screenshot da descrição: {e}")
             
         except Exception as e:
             print(f"[AVISO] Erro ao extrair descrição: {e}")
@@ -413,19 +254,19 @@ def main():
     """Função principal para executar o scraping."""
     
     # URL do produto
-    url = "https://www.mercadolivre.com.br/purificador-de-agua-ibbl-edue-prata-bivolt-79073001/up/MLBU775324063"
+    url = "https://www.mercadolivre.com.br/panificadora-19-programas-gallant-600w-branca/p/MLB44589848?pdp_filters=condition:new%7Cadult_content:yes%7Cofficial_store:399#polycard_client=mshops-appearance-api&component=collection_grid&wid=MLB3928277105&source=eshops&title=Productos+recomendados&tracking_id=c88f48c2-cf79-42ec-b9ae-f0ed50e1633e&sid=storefronts&global_position=12"
     
     print("=" * 80)
     print("SCRAPING DE PRODUTO - MERCADO LIVRE")
     print("=" * 80)
     print()
     
-    # Executar scraping com captura de screenshots
-    dados = scrape_mercado_livre(url, capturar_screenshots=True)
+    # Executar scraping
+    dados = scrape_mercado_livre(url)
     
     # Exibir resultados
     print("\n" + "=" * 80)
-    print("DADOS EXTRAÍDOS (JSON):")
+    print("DADOS EXTRAÍDOS:")
     print("=" * 80)
     print(json.dumps(dados, ensure_ascii=False, indent=2))
     print("\n")
@@ -436,24 +277,9 @@ def main():
     print("=" * 80)
     print(f"Título: {dados['titulo'][:60]}..." if len(dados['titulo']) > 60 else f"Título: {dados['titulo']}")
     print(f"Bullet Points: {len(dados['bullet_points'])} encontrados")
-    if dados['bullet_points']:
-        for i, bp in enumerate(dados['bullet_points'], 1):
-            print(f"  {i}. {bp[:60]}...")
-    print(f"\nCaracterísticas: {len(dados['caracteristicas'])} encontradas")
-    if dados['caracteristicas']:
-        for chave, valor in dados['caracteristicas'].items():
-            print(f"  - {chave}: {valor}")
+    print(f"Características: {len(dados['caracteristicas'])} encontradas")
     print(f"Cor: {dados['cor']}")
     print(f"Descrição: {len(dados['descricao'])} caracteres")
-    if dados['descricao'] != "N/A":
-        print(f"Primeiros 100 caracteres: {dados['descricao'][:100]}...")
-    
-    # Exibir informações sobre screenshots capturados
-    if dados['screenshots']:
-        print(f"\nScreenshots capturados: {len(dados['screenshots'])}")
-        for tipo, caminho in dados['screenshots'].items():
-            print(f"  - {tipo}: {caminho}")
-    
     print("=" * 80)
 
 
