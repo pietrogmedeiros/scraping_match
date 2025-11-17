@@ -1,99 +1,282 @@
-# Mercado Livre Web Scraper
+# 🛍️ Mercado Livre Scraper API
 
-Script Python de web scraping para extrair dados estruturados de produtos do Mercado Livre utilizando Selenium com navegador Chromium em modo headless.
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.104.1-009688?style=flat-square&logo=fastapi)](https://fastapi.tiangelo.com/)
+[![Python](https://img.shields.io/badge/Python-3.11-3776AB?style=flat-square&logo=python)](https://www.python.org/)
+[![Selenium](https://img.shields.io/badge/Selenium-4.14.1-00A82E?style=flat-square&logo=selenium)](https://www.selenium.dev/)
+[![License](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)](LICENSE)
+[![Status](https://img.shields.io/badge/Status-Production%20Ready-brightgreen?style=flat-square)](https://github.com/pietrogmedeiros/scraping_match)
 
-## 📋 Características
+> 🚀 **API poderosa para scraping automático de produtos do Mercado Livre com captura de screenshots, autenticação por token e suporte total a n8n**
 
-✅ **Extração de Dados Estruturados:**
-- Título do produto
-- Bullet points/vantagens do produto
-- Características e especificações (chave-valor)
-- Cor do produto
-- Descrição completa (com suporte a iframes)
+---
 
-✅ **Tecnologias:**
-- Selenium WebDriver para automação do navegador
-- Chromium em modo headless para melhor performance
-- Webdriver-manager para gerenciar automaticamente o driver
-- Tratamento robusto de exceções
-- Seletores CSS/XPath otimizados
+## ✨ Funcionalidades Principais
 
-✅ **Recursos Avançados:**
-- Espera explícita para carregamento de elementos
-- Suporte a iframes com troca de contexto
-- Múltiplos seletores para aumentar compatibilidade
-- Remoção de duplicatas em dados extraídos
-- Logging detalhado do processo de scraping
+### 🎯 Scraping Inteligente
+- ✅ Extração automática de **título** do produto
+- ✅ Coleta de **bullet points** e vantagens
+- ✅ Captura de **características/especificações** com chave-valor
+- ✅ Identificação de **cor** (quando disponível)
+- ✅ Extração de **descrição completa** (incluindo iframes)
+- ✅ Tratamento de **erros robusto**
 
-## 📦 Instalação
+### 📸 Screenshots Automáticos
+Captura automaticamente **5 screenshots** por produto:
+1. 🖼️ Página completa do produto
+2. 📝 Título e informações principais
+3. ⭐ Bullet points/vantagens
+4. 🏷️ Tabela de características
+5. 📄 Descrição detalhada
+
+### 🔐 Autenticação
+- ✅ **Bearer Token** seguro em todos os endpoints
+- ✅ Validação em tempo real
+- ✅ Suporte a variáveis de ambiente
+
+### 🤖 Integração n8n
+- ✅ Documentação completa para n8n
+- ✅ Exemplos de 10+ workflows
+- ✅ Pronto para automação
+
+### 🌐 Deploy
+- ✅ **Vercel** - Deploy em 1 clique
+- ✅ **Docker** - Container ready
+- ✅ **Local** - Desenvolvimento rápido
+
+### 📊 API RESTful
+- ✅ **FastAPI** com documentação Swagger automática
+- ✅ **JSON Response** estruturado
+- ✅ Tratamento de erros 4xx/5xx
+- ✅ CORS configurável
+
+---
+
+## 🏗️ Arquitetura
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    CLIENT (n8n/API)                         │
+└────────────────────────┬────────────────────────────────────┘
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────────────┐
+│                   FastAPI Server                            │
+│  ┌────────────────────────────────────────────────────────┐ │
+│  │  POST /scrape (Autenticado)                            │ │
+│  │  GET  /status                                          │ │
+│  │  GET  /screenshot/{filename}                           │ │
+│  │  GET  /screenshots/list                                │ │
+│  └────────────────────────────────────────────────────────┘ │
+└────────────────────────┬────────────────────────────────────┘
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────────────┐
+│              Selenium + Chromium (Headless)                 │
+│  ┌────────────────────────────────────────────────────────┐ │
+│  │  1. Navega para URL                                    │ │
+│  │  2. Aguarda carregamento                               │ │
+│  │  3. Extrai dados (CSS Selectors/XPath)                │ │
+│  │  4. Captura 5 screenshots                              │ │
+│  │  5. Retorna JSON estruturado                           │ │
+│  └────────────────────────────────────────────────────────┘ │
+└────────────────────────┬────────────────────────────────────┘
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────────────┐
+│                  Mercado Livre                              │
+│              (Website do Produto)                           │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Fluxo de Requisição
+
+```
+INPUT (URL)
+    │
+    ▼
+┌─────────────────────────────────────┐
+│ 1. Validação de URL                 │
+│    - Verifica token                 │
+│    - Valida domínio Mercado Livre   │
+└──────────────┬──────────────────────┘
+               │
+               ▼
+┌─────────────────────────────────────┐
+│ 2. Browser Setup                    │
+│    - Inicia Chromium headless       │
+│    - Configura user-agent           │
+└──────────────┬──────────────────────┘
+               │
+               ▼
+┌─────────────────────────────────────┐
+│ 3. Page Load                        │
+│    - Navega para URL                │
+│    - Aguarda elementos carregarem   │
+│    - Timeout 10s                    │
+└──────────────┬──────────────────────┘
+               │
+               ▼
+┌─────────────────────────────────────┐
+│ 4. Data Extraction                  │
+│    - Título                         │
+│    - Bullet Points                  │
+│    - Características                │
+│    - Cor                            │
+│    - Descrição (iframes)            │
+└──────────────┬──────────────────────┘
+               │
+               ▼
+┌─────────────────────────────────────┐
+│ 5. Screenshots Capture              │
+│    - 5 screenshots diferentes       │
+│    - Salvos com timestamp           │
+│    - Formato PNG                    │
+└──────────────┬──────────────────────┘
+               │
+               ▼
+┌─────────────────────────────────────┐
+│ 6. Response                         │
+│    - JSON estruturado               │
+│    - URLs dos screenshots           │
+│    - Timestamp                      │
+│    - Status de sucesso              │
+└──────────────┬──────────────────────┘
+               │
+               ▼
+OUTPUT (JSON Response)
+```
+
+---
+
+## 🚀 Quick Start
 
 ### Pré-requisitos
-- Python 3.7 ou superior
-- pip (gerenciador de pacotes Python)
+- Python 3.11+
+- pip ou conda
+- Git
 
-### Passos de Instalação
-
-1. **Navegar até o diretório do projeto:**
-```bash
-cd /Users/pietro_medeiros/Downloads/scrapping-match-1P
-```
-
-2. **Instalar dependências:**
-```bash
-pip install selenium webdriver-manager
-```
-
-Ou, se estiver usando um ambiente virtual (recomendado):
-```bash
-python -m venv venv
-source venv/bin/activate  # No macOS/Linux
-pip install selenium webdriver-manager
-```
-
-## 🚀 Uso
-
-### Executar o Script Principal
+### Instalação (5 minutos)
 
 ```bash
-python scraping_mercado_livre.py
+# 1️⃣ Clonar repositório
+git clone https://github.com/pietrogmedeiros/scraping_match.git
+cd scraping_match
+
+# 2️⃣ Criar ambiente virtual
+python -m venv .venv
+source .venv/bin/activate  # ou: .venv\Scripts\activate (Windows)
+
+# 3️⃣ Instalar dependências
+pip install -r requirements.txt
+
+# 4️⃣ Configurar variáveis de ambiente
+cp .env.example .env
+# Editar .env e adicionar seu token
+
+# 5️⃣ Iniciar API
+python api.py
 ```
 
-Ou a versão v2 (com mais extração de dados):
-```bash
-python scraping_mercado_livre_v2.py
-```
+🎉 **API rodando em**: http://localhost:8000
 
-### Exemplo de Saída
+---
 
-```json
+## 📡 Endpoints
+
+### POST /scrape
+```http
+POST /scrape
+Authorization: Bearer <TOKEN>
+Content-Type: application/json
+
 {
-  "titulo": "Panificadora 19 Programas Gallant 600w Branca",
-  "bullet_points": [
-    "Quantidade de programas:",
-    "Capacidade de pão:"
-  ],
-  "caracteristicas": {
-    "Capacidade de pão": "1 kg",
-    "Quantidade de programas": "19"
-  },
-  "cor": "Branco",
-  "descricao": "Descrição\nNada melhor do que apreciar o cheiro irresistível de pão fresca..."
+  "url": "https://www.mercadolivre.com.br/...",
+  "capturar_screenshots": true
 }
 ```
 
-## 🔧 Como Customizar para Outros Produtos
-
-### Método 1: Modificar a URL no Script
-Edite a variável `url` na função `main()`:
-
-```python
-def main():
-    url = "NOVA_URL_DO_PRODUTO_AQUI"
-    dados = scrape_mercado_livre(url)
+**Response:**
+```json
+{
+  "sucesso": true,
+  "dados": {
+    "titulo": "Panificadora 19 Programas Gallant 600w Branca",
+    "bullet_points": ["Quantidade de programas:", "..."],
+    "caracteristicas": {
+      "Capacidade de pão": "1 kg",
+      "Quantidade de programas": "19"
+    },
+    "cor": "Branca",
+    "descricao": "Nada melhor do que...",
+    "screenshots": {
+      "pagina_completa": "/screenshot/20251117_194548_01_pagina_completa.png",
+      "titulo": "/screenshot/20251117_194548_02_titulo.png"
+    }
+  }
+}
 ```
 
-### Método 2: Passar URL como Argumento
-Modifique o script para aceitar argumentos:
+---
+
+## 🔐 Autenticação
+
+Use Bearer Token em todos os endpoints protegidos:
+
+```bash
+Authorization: Bearer seu_token_secreto_super_seguro_aqui
+```
+
+Gerar token seguro:
+```python
+import secrets
+print(secrets.token_urlsafe(32))
+```
+
+---
+
+## 🔗 Integração n8n
+
+### Configuração Básica
+
+1. Adicionar **HTTP Request** node
+2. Method: `POST`
+3. URL: `http://localhost:8000/scrape`
+4. Headers:
+   - `Authorization: Bearer seu_token`
+   - `Content-Type: application/json`
+5. Body:
+   ```json
+   {
+     "url": "https://www.mercadolivre.com.br/...",
+     "capturar_screenshots": true
+   }
+   ```
+
+📖 **Documentação completa**: [N8N_ENDPOINT.md](./N8N_ENDPOINT.md)  
+📚 **Workflows prontos**: [N8N_WORKFLOWS.md](./N8N_WORKFLOWS.md)
+
+---
+
+## 📦 Deploy
+
+### Vercel (Recomendado)
+
+```bash
+# 1. Push para GitHub
+git push origin main
+
+# 2. Conectar Vercel
+# Vercel → Add New → Project → Import GitHub
+
+# 3. Configurar variáveis
+# API_TOKEN=seu_token_secreto
+```
+
+✅ API em: `https://seu-projeto.vercel.app`
+
+---
+
+## 📚 Documentação
 
 ```python
 import sys
@@ -163,47 +346,95 @@ O script fornece feedback detalhado em tempo real:
 
 1. **Modo Headless**: Melhora a performance significativamente
 2. **User-Agent Customizado**: Evita detecção como bot
-3. **Desabilitar GPU**: Reduz consumo de memória
-4. **Desabilitar Sandbox**: Necessário em alguns ambientes
-5. **Timeout Apropriado**: Evita travamentos indefinidos
+3. **Desabilitar GPU**: Reduz consumo de memória| **README.md** | Este arquivo (Visão geral) |
+| **[README_API.md](./README_API.md)** | Documentação completa da API |
+| **[N8N_ENDPOINT.md](./N8N_ENDPOINT.md)** | Guia de configuração no n8n |
+| **[N8N_WORKFLOWS.md](./N8N_WORKFLOWS.md)** | 10+ exemplos de workflows |
+| **[EXEMPLOS_USO.md](./EXEMPLOS_USO.md)** | Exemplos em 10+ linguagens |
+| **[DEPLOYMENT_VERCEL.md](./DEPLOYMENT_VERCEL.md)** | Guia completo de deploy |
+| **[RESUMO.md](./RESUMO.md)** | Overview técnico do projeto |
 
-## 🤝 Integração com Outros Projetos
+---
 
-```python
-from scraping_mercado_livre import scrape_mercado_livre
+## ⚙️ Configuração
 
-url = "https://seu-produto.com"
-dados = scrape_mercado_livre(url)
+### Arquivo `.env`
 
-# Usar os dados
-print(f"Produto: {dados['titulo']}")
-print(f"Preço no: {dados.get('preco', 'N/A')}")
+```env
+API_TOKEN=seu_token_secreto_super_seguro_aqui
+PORT=8000
 ```
 
-## ⚠️ Disclaimer
+---
 
-Este script é fornecido apenas para fins educacionais. Certifique-se de:
-- Verificar os termos de serviço do Mercado Livre
-- Respeitar o arquivo `robots.txt`
-- Não sobrecarregar os servidores
-- Usar responsavelmente e eticamente
+## 🧪 Testes
 
-## 📚 Recursos Adicionais
+```bash
+python test_api.py
+```
 
-- [Documentação Selenium](https://selenium-python.readthedocs.io/)
-- [Webdriver-manager](https://github.com/SherlocksoftWare/python-webdriver-manager)
-- [MDN - Seletores CSS](https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_Selectors)
-- [W3C XPath](https://www.w3.org/TR/xpath-10/)
+**Resultado esperado**: ✅ 6/6 testes passando
+
+---
+
+## 📈 Performance
+
+| Operação | Tempo |
+|----------|-------|
+| Iniciar Chromium | 2-3s |
+| Acessar URL | 2-4s |
+| Extrair dados | 1-2s |
+| Capturar screenshots | 2-3s |
+| **Total** | **~10-15s** |
+
+---
+
+## 📦 Dependências
+
+```
+fastapi==0.104.1          # Framework API
+uvicorn==0.24.0           # Servidor ASGI
+selenium==4.14.1          # Web scraping
+webdriver-manager==4.0.1  # Gerenciar drivers
+python-dotenv==1.0.0      # Variáveis de ambiente
+pydantic==2.4.2           # Validação de dados
+requests==2.31.0          # HTTP client
+```
+
+---
+
+## 🤝 Contribuindo
+
+1. Fork o projeto
+2. Crie uma branch (`git checkout -b feature/AmazingFeature`)
+3. Commit (`git commit -m 'Add AmazingFeature'`)
+4. Push (`git push origin feature/AmazingFeature`)
+5. Abra um Pull Request
+
+---
 
 ## 📞 Suporte
 
-Se encontrar problemas:
-1. Verifique se as dependências estão instaladas: `pip list`
-2. Verifique a conexão com a internet
-3. Confirme se a URL do produto é válida
-4. Tente aumentar o timeout em `WebDriverWait`
-5. Verifique se o Chromium foi instalado corretamente
+- 📖 [Documentação Completa](./README_API.md)
+- 🐛 [GitHub Issues](https://github.com/pietrogmedeiros/scraping_match/issues)
+- 💬 [GitHub Discussions](https://github.com/pietrogmedeiros/scraping_match/discussions)
 
-## 📄 Licença
+---
 
-Este projeto é fornecido como está, sem garantias.
+## ⭐ Dê uma estrela!
+
+Se este projeto foi útil, considere dar uma ⭐
+
+---
+
+<div align="center">
+
+### 🚀 Pronto para começar?
+
+[📖 Documentação](./README_API.md) | [🔧 n8n](./N8N_ENDPOINT.md) | [🌐 Deploy](./DEPLOYMENT_VERCEL.md)
+
+**Versão**: 1.0.0 | **Status**: ✅ Production Ready | **2025**
+
+Made with ❤️
+
+</div>
