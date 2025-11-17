@@ -207,15 +207,23 @@ def scrape_mercado_livre(url, capturar_screenshots=True):
                                         continue
                                 
                                 # Padrão 3: Elemento com classe de rótulo e valor
-                                text = element.text.strip() if element.text else ""
-                                if text and (": " in text or ":" in text):
-                                    partes = text.split(":", 1)
-                                    if len(partes) == 2:
-                                        chave = partes[0].strip()
-                                        valor = partes[1].strip()
-                                        if chave and valor:
-                                            dados_produto["caracteristicas"][chave] = valor
-                                            specs_found = True
+                                try:
+                                    text = element.text.strip() if element.text else ""
+                                    if text and (": " in text or ":" in text):
+                                        try:
+                                            partes = text.split(":", 1)
+                                            if len(partes) == 2:
+                                                chave = partes[0].strip()
+                                                valor = partes[1].strip()
+                                                if chave and valor:
+                                                    dados_produto["caracteristicas"][chave] = valor
+                                                    specs_found = True
+                                        except Exception as split_error:
+                                            print(f"[AVISO] Erro ao fazer split: {split_error}, text: {repr(text)}")
+                                            continue
+                                except Exception as pattern3_error:
+                                    print(f"[AVISO] Erro no padrão 3: {pattern3_error}")
+                                    continue
                                 
                             except (StaleElementReferenceException, NoSuchElementException):
                                 continue
