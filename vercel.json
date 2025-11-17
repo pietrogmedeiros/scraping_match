@@ -15,8 +15,5 @@
       "src": "/(.*)",
       "dest": "api.py"
     }
-  ],
-  "env": {
-    "API_TOKEN": "@API_TOKEN"
-  }
+  ]
 }

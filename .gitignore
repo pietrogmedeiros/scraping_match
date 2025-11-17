@@ -56,3 +56,4 @@ nohup.out
 # OS
 Thumbs.db
 *.bak
+.vercel
