@@ -110,6 +110,7 @@ async def status():
         screenshots_count = len(os.listdir(screenshots_dir))
     
     return {
+        "online": True,
         "status": "online",
         "timestamp": datetime.now().isoformat(),
         "screenshots_armazenados": screenshots_count
