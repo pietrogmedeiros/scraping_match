@@ -82,7 +82,8 @@ def scrape_mercado_livre(url, capturar_screenshots=True):
             titulo_element = wait.until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, "h1.ui-pdp-title"))
             )
-            dados_produto["titulo"] = titulo_element.text.strip()
+            titulo_text = titulo_element.text.strip() if titulo_element.text else "N/A"
+            dados_produto["titulo"] = titulo_text
             print(f"[OK] Título encontrado: {dados_produto['titulo'][:50]}...")
             
             # Capturar screenshot do título
@@ -120,9 +121,12 @@ def scrape_mercado_livre(url, capturar_screenshots=True):
                     elements = driver.find_elements(By.CSS_SELECTOR, selector)
                     if elements and len(elements) > 0:
                         for element in elements:
-                            text = element.text.strip()
-                            if text and len(text) > 5 and len(text) < 500:  # Filtrar textos válidos
-                                found_bullets.add(text)
+                            try:
+                                text = element.text.strip() if element.text else ""
+                                if text and len(text) > 5 and len(text) < 500:  # Filtrar textos válidos
+                                    found_bullets.add(text)
+                            except:
+                                continue
                         
                         if found_bullets:
                             print(f"[OK] Bullet points encontrados com seletor: {selector}")
@@ -181,12 +185,12 @@ def scrape_mercado_livre(url, capturar_screenshots=True):
                         for element in spec_elements:
                             try:
                                 # Tentar diferentes padrões de chave-valor
-                                
+                            try:
                                 # Padrão 1: dois td/spans em sequência
                                 cells = element.find_elements(By.TAG_NAME, "td")
                                 if len(cells) >= 2:
-                                    chave = cells[0].text.strip()
-                                    valor = cells[1].text.strip()
+                                    chave = cells[0].text.strip() if cells[0].text else ""
+                                    valor = cells[1].text.strip() if cells[1].text else ""
                                     if chave and valor:
                                         dados_produto["caracteristicas"][chave] = valor
                                         specs_found = True
@@ -195,8 +199,8 @@ def scrape_mercado_livre(url, capturar_screenshots=True):
                                 # Padrão 2: Chave e valor em spans dentro de divs
                                 spans = element.find_elements(By.TAG_NAME, "span")
                                 if len(spans) >= 2:
-                                    chave = spans[0].text.strip()
-                                    valor = spans[1].text.strip() if len(spans) > 1 else ""
+                                    chave = spans[0].text.strip() if spans[0].text else ""
+                                    valor = spans[1].text.strip() if (spans[1].text and len(spans) > 1) else ""
                                     if chave and valor and not chave.endswith(":"):
                                         dados_produto["caracteristicas"][chave] = valor
                                         specs_found = True
@@ -258,14 +262,17 @@ def scrape_mercado_livre(url, capturar_screenshots=True):
                 try:
                     elementos = driver.find_elements(By.CSS_SELECTOR, selector)
                     for element in elementos:
-                        text = element.text.strip()
-                        # Filtrar por comprimento e evitar números de desconto
-                        if text and 1 < len(text) < 50 and not text.endswith("%") and not re.match(r'^\d+%', text):
-                            # Verificar se não é um valor de desconto ou percentual
-                            if "%" not in text:
-                                dados_produto["cor"] = text
-                                print(f"[OK] Cor encontrada: {text}")
-                                break
+                        try:
+                            text = element.text.strip() if element.text else ""
+                            # Filtrar por comprimento e evitar números de desconto
+                            if text and 1 < len(text) < 50 and not text.endswith("%") and not re.match(r'^\d+%', text):
+                                # Verificar se não é um valor de desconto ou percentual
+                                if "%" not in text:
+                                    dados_produto["cor"] = text
+                                    print(f"[OK] Cor encontrada: {text}")
+                                    break
+                        except:
+                            continue
                     
                     if dados_produto["cor"] != "N/A":
                         break
@@ -296,7 +303,7 @@ def scrape_mercado_livre(url, capturar_screenshots=True):
                         
                         try:
                             descricao_element = driver.find_element(By.CSS_SELECTOR, "body")
-                            descricao = descricao_element.text.strip()
+                            descricao = descricao_element.text.strip() if descricao_element.text else ""
                             if descricao and len(descricao) > 20:
                                 print(f"[OK] Descrição encontrada em iframe: {len(descricao)} caracteres")
                                 break
@@ -335,11 +342,14 @@ def scrape_mercado_livre(url, capturar_screenshots=True):
                         try:
                             desc_elements = driver.find_elements(By.CSS_SELECTOR, selector)
                             for element in desc_elements:
-                                text = element.text.strip()
-                                if text and len(text) > 20:
-                                    descricao = text
-                                    print(f"[OK] Descrição encontrada: {len(descricao)} caracteres")
-                                    break
+                                try:
+                                    text = element.text.strip() if element.text else ""
+                                    if text and len(text) > 20:
+                                        descricao = text
+                                        print(f"[OK] Descrição encontrada: {len(descricao)} caracteres")
+                                        break
+                                except:
+                                    continue
                             
                             if descricao and len(descricao) > 20:
                                 break
