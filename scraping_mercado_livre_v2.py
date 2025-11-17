@@ -185,7 +185,7 @@ def scrape_mercado_livre(url, capturar_screenshots=True):
                         for element in spec_elements:
                             try:
                                 # Tentar diferentes padrões de chave-valor
-                            try:
+                                
                                 # Padrão 1: dois td/spans em sequência
                                 cells = element.find_elements(By.TAG_NAME, "td")
                                 if len(cells) >= 2:
