@@ -9,6 +9,8 @@ from bs4 import BeautifulSoup
 import re
 import json
 from typing import Dict, List
+import base64
+import time
 
 
 def scrape_mercado_livre(url: str, capturar_screenshots: bool = False) -> Dict:
@@ -232,6 +234,100 @@ def scrape_mercado_livre(url: str, capturar_screenshots: bool = False) -> Dict:
         logs.append(f"Erro geral: {e}")
         import traceback
         traceback.print_exc()
+    
+    # ============================================
+    # CAPTURAR SCREENSHOTS (se solicitado)
+    # ============================================
+    if capturar_screenshots:
+        print("[DEBUG] Iniciando captura de screenshots...")
+        logs.append("Iniciando captura de screenshots...")
+        
+        try:
+            from selenium import webdriver
+            from selenium.webdriver.chrome.options import Options
+            from webdriver_manager.chrome import ChromeDriverManager
+            from selenium.webdriver.chrome.service import Service
+            import time
+            
+            # Configurar Chrome
+            chrome_options = Options()
+            chrome_options.add_argument('--headless')
+            chrome_options.add_argument('--no-sandbox')
+            chrome_options.add_argument('--disable-dev-shm-usage')
+            chrome_options.add_argument('--start-maximized')
+            chrome_options.add_argument('--disable-blink-features=AutomationControlled')
+            chrome_options.add_argument('user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36')
+            
+            service = Service(ChromeDriverManager().install())
+            driver = webdriver.Chrome(service=service, options=chrome_options)
+            
+            print("[INFO] Abrindo página com Selenium...")
+            driver.get(url)
+            time.sleep(3)  # Aguardar carregamento
+            
+            # Capturar screenshots em diferentes partes da página
+            screenshots = {}
+            
+            # 1. Screenshot completo da página
+            print("[INFO] Capturando screenshot completo...")
+            screenshot_full = driver.get_screenshot_as_png()
+            screenshots["pagina_completa"] = base64.b64encode(screenshot_full).decode('utf-8')
+            logs.append("✓ Screenshot completo capturado")
+            
+            # 2. Screenshot do produto (scroll até section principal)
+            try:
+                product_section = driver.find_element("xpath", "//section[@data-testid='product-section']")
+                location = product_section.location
+                size = product_section.size
+                driver.execute_script(f"window.scrollTo(0, {location['y']});")
+                time.sleep(1)
+                screenshot_prod = driver.get_screenshot_as_png()
+                screenshots["secao_produto"] = base64.b64encode(screenshot_prod).decode('utf-8')
+                logs.append("✓ Screenshot da seção de produto capturado")
+            except:
+                logs.append("⚠ Não foi possível capturar screenshot da seção de produto")
+            
+            # 3. Screenshot das características
+            try:
+                driver.execute_script("window.scrollTo(0, document.body.scrollHeight * 0.3);")
+                time.sleep(1)
+                screenshot_specs = driver.get_screenshot_as_png()
+                screenshots["caracteristicas"] = base64.b64encode(screenshot_specs).decode('utf-8')
+                logs.append("✓ Screenshot das características capturado")
+            except:
+                logs.append("⚠ Não foi possível capturar screenshot das características")
+            
+            # 4. Screenshot da descrição
+            try:
+                driver.execute_script("window.scrollTo(0, document.body.scrollHeight * 0.6);")
+                time.sleep(1)
+                screenshot_desc = driver.get_screenshot_as_png()
+                screenshots["descricao"] = base64.b64encode(screenshot_desc).decode('utf-8')
+                logs.append("✓ Screenshot da descrição capturado")
+            except:
+                logs.append("⚠ Não foi possível capturar screenshot da descrição")
+            
+            # 5. Screenshot do rodapé
+            try:
+                driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+                time.sleep(1)
+                screenshot_footer = driver.get_screenshot_as_png()
+                screenshots["rodape"] = base64.b64encode(screenshot_footer).decode('utf-8')
+                logs.append("✓ Screenshot do rodapé capturado")
+            except:
+                logs.append("⚠ Não foi possível capturar screenshot do rodapé")
+            
+            driver.quit()
+            print(f"[OK] {len(screenshots)} screenshots capturados com sucesso!")
+            logs.append(f"Total: {len(screenshots)} screenshots capturados")
+            dados_produto["screenshots"] = screenshots
+            
+        except ImportError:
+            print("[AVISO] Selenium/webdriver-manager não instalado. Pulando screenshots.")
+            logs.append("AVISO: Selenium não disponível - screenshots não capturados")
+        except Exception as e:
+            print(f"[AVISO] Erro ao capturar screenshots: {e}")
+            logs.append(f"AVISO: Erro ao capturar screenshots: {e}")
     
     # Adicionar logs à resposta
     dados_produto["debug_logs"] = logs

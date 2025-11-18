@@ -10,6 +10,77 @@
 
 ---
 
+## 🔄 Fluxo de Arquitetura (n8n + Servidor Local + ngrok)
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                            n8n Workflow                                  │
+│  (Automação na nuvem - automation.n8n.cloud)                            │
+└─────────────────────────────────────────────────────────────────────────┘
+                                  │
+                                  │ POST /scrape
+                                  │ (URL: https://xxxxx.ngrok-free.app)
+                                  ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                          ngrok Tunnel                                    │
+│  (Expõe servidor local para internet)                                   │
+│  Command: ngrok http 5000                                               │
+└─────────────────────────────────────────────────────────────────────────┘
+                                  │
+                                  │ Redireciona para
+                                  │ localhost:5000
+                                  ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    Flask Server Local (Porta 5000)                      │
+│  📍 /scrape (POST)                                                       │
+│  - Recebe URL do Mercado Livre                                          │
+│  - Valida autenticação (Bearer Token)                                   │
+│  - Chama scraper                                                        │
+└─────────────────────────────────────────────────────────────────────────┘
+                                  │
+                                  │ Chama
+                                  ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│              scraping_mercado_livre_v2.py (Selenium)                    │
+│  - Abre navegador Chrome headless                                       │
+│  - Acessa URL do produto                                               │
+│  - Extrai: título, bullets, specs, cor, descrição                       │
+│  - Captura 4 screenshots em base64                                      │
+│  - Retorna JSON com todos os dados                                      │
+└─────────────────────────────────────────────────────────────────────────┘
+                                  │
+                                  │ Retorna JSON
+                                  ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    JSON Response + Screenshots                          │
+│  {                                                                       │
+│    "dados": {                                                            │
+│      "titulo": "...",                                                    │
+│      "bullet_points": [...],                                            │
+│      "caracteristicas": {...},                                          │
+│      "screenshots": {                                                    │
+│        "pagina_completa": "iVBORw0KGgo...",  ← base64                  │
+│        "caracteristicas": "iVBORw0KGgo...",  ← base64                  │
+│        "descricao": "iVBORw0KGgo...",        ← base64                  │
+│        "rodape": "iVBORw0KGgo..."            ← base64                  │
+│      }                                                                   │
+│    }                                                                     │
+│  }                                                                       │
+└─────────────────────────────────────────────────────────────────────────┘
+                                  │
+                                  │ ngrok tunnel retorna
+                                  ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        n8n Processa Output                              │
+│  - Recebe JSON com dados + screenshots                                  │
+│  - "Convert to File" → salva PNG                                        │
+│  - Pode enviar para S3, email, banco de dados                           │
+│  - Executa próximas ações do workflow                                   │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
 ## ✨ Funcionalidades Principais
 
 ### 🎯 Scraping Inteligente
@@ -181,6 +252,72 @@ python api.py
 
 ---
 
+## 🤖 Usando com n8n (Automação na Nuvem)
+
+### 1️⃣ Preparar o Servidor Local
+
+```bash
+# Terminal 1: Servidor Flask
+cd /Users/pietro_medeiros/Downloads/scraping_match
+source /Users/pietro_medeiros/.local/share/virtualenvs/pietro_medeiros-XvhqiEUs/bin/activate
+python server_local.py
+
+# Terminal 2: ngrok (em outro terminal)
+ngrok http 5000
+```
+
+Copie a URL gerada pelo ngrok (ex: `https://68a53b5061e1.ngrok-free.app`)
+
+### 2️⃣ Configurar n8n
+
+1. Acesse: https://automation.n8n.cloud
+2. Crie um novo workflow
+3. Adicione node **"HTTP Request"**:
+   - **Method**: POST
+   - **URL**: `https://68a53b5061e1.ngrok-free.app/scrape`
+   - **Headers**:
+     - `Authorization`: `Bearer seu_token`
+     - `Content-Type`: `application/json`
+   - **Body**:
+   ```json
+   {
+     "url": "https://www.mercadolivre.com.br/...",
+     "capturar_screenshots": true
+   }
+   ```
+
+### 3️⃣ Processar Screenshots
+
+Após HTTP Request, adicione:
+
+**"Execute Code"** (Node.js):
+```javascript
+const screenshots = $node["HTTP Request"].json.dados.screenshots;
+const files = [];
+
+Object.entries(screenshots).forEach(([name, base64]) => {
+  files.push({
+    name: name,
+    data: base64
+  });
+});
+
+return files;
+```
+
+**"Write to File"** (para cada screenshot):
+- **File Path**: `/tmp/${name}.png`
+- **Input Binary Field**: `data`
+
+### 4️⃣ Opções Avançadas
+
+- **Enviar para S3**: Use node AWS S3
+- **Salvar em BD**: PostgreSQL, MongoDB, etc
+- **Enviar por Email**: Com anexos PNG
+- **Webhook**: Enviar para outra API
+
+---
+
 ## 📡 Endpoints
 
 ### POST /scrape
@@ -257,184 +394,8 @@ print(secrets.token_urlsafe(32))
 
 ---
 
-## 📦 Deploy
-
-### Vercel (Recomendado)
-
-```bash
-# 1. Push para GitHub
-git push origin main
-
-# 2. Conectar Vercel
-# Vercel → Add New → Project → Import GitHub
-
-# 3. Configurar variáveis
-# API_TOKEN=seu_token_secreto
-```
-
-✅ API em: `https://seu-projeto.vercel.app`
-
----
-
-## 📚 Documentação
-
-```python
-import sys
-
-def main():
-    url = sys.argv[1] if len(sys.argv) > 1 else "URL_PADRÃO"
-    dados = scrape_mercado_livre(url)
-
-if __name__ == "__main__":
-    main()
-```
-
-Uso:
-```bash
-python scraping_mercado_livre.py "https://seu-link-aqui.com"
-```
-
-## 📊 Estrutura de Dados Retornada
-
-| Campo | Tipo | Descrição |
-|-------|------|-----------|
-| `titulo` | string | Título completo do produto |
-| `bullet_points` | list | Lista de vantagens/destaques |
-| `caracteristicas` | dict | Dicionário chave-valor das especificações |
-| `cor` | string | Cor do produto ou "N/A" |
-| `descricao` | string | Descrição completa do produto |
-
-## ⚙️ Configurações Avançadas
-
-### Ajustar Timeout
-No script, modifique a linha:
-```python
-wait = WebDriverWait(driver, 10)  # 10 segundos
-```
-
-### Desabilitar Modo Headless
-Para ver o navegador em ação, comente a linha:
-```python
-# chrome_options.add_argument("--headless")
-```
-
-### Adicionar Tempo de Espera Extra
-Para páginas mais lentas, aumente:
-```python
-time.sleep(3)  # Aumentar para 5 ou mais se necessário
-```
-
-## 🐛 Tratamento de Erros
-
-O script inclui tratamento para:
-- **TimeoutException**: Página não carrega no tempo limite
-- **NoSuchElementException**: Elemento não encontrado na página
-- **StaleElementReferenceException**: Elemento desatualizado no DOM
-- **Erros genéricos**: Exceções não previstas
-
-Todos os erros são capturados e registrados, permitindo que o script continue a execução mesmo com falhas parciais.
-
-## 📝 Logging
-
-O script fornece feedback detalhado em tempo real:
-- `[INFO]` - Operações informativas
-- `[OK]` - Sucesso na extração
-- `[AVISO]` - Problemas não críticos (dados não encontrados)
-- `[ERRO]` - Erros críticos
-
-## 🔒 Considerações de Performance e Segurança
-
-1. **Modo Headless**: Melhora a performance significativamente
-2. **User-Agent Customizado**: Evita detecção como bot
-3. **Desabilitar GPU**: Reduz consumo de memória| **README.md** | Este arquivo (Visão geral) |
-| **[README_API.md](./README_API.md)** | Documentação completa da API |
-| **[N8N_ENDPOINT.md](./N8N_ENDPOINT.md)** | Guia de configuração no n8n |
-| **[N8N_WORKFLOWS.md](./N8N_WORKFLOWS.md)** | 10+ exemplos de workflows |
-| **[EXEMPLOS_USO.md](./EXEMPLOS_USO.md)** | Exemplos em 10+ linguagens |
-| **[DEPLOYMENT_VERCEL.md](./DEPLOYMENT_VERCEL.md)** | Guia completo de deploy |
-| **[RESUMO.md](./RESUMO.md)** | Overview técnico do projeto |
-
----
-
-## ⚙️ Configuração
-
-### Arquivo `.env`
-
-```env
-API_TOKEN=seu_token_secreto_super_seguro_aqui
-PORT=8000
-```
-
----
-
-## 🧪 Testes
-
-```bash
-python test_api.py
-```
-
-**Resultado esperado**: ✅ 6/6 testes passando
-
----
-
-## 📈 Performance
-
-| Operação | Tempo |
-|----------|-------|
-| Iniciar Chromium | 2-3s |
-| Acessar URL | 2-4s |
-| Extrair dados | 1-2s |
-| Capturar screenshots | 2-3s |
-| **Total** | **~10-15s** |
-
----
-
-## 📦 Dependências
-
-```
-fastapi==0.104.1          # Framework API
-uvicorn==0.24.0           # Servidor ASGI
-selenium==4.14.1          # Web scraping
-webdriver-manager==4.0.1  # Gerenciar drivers
-python-dotenv==1.0.0      # Variáveis de ambiente
-pydantic==2.4.2           # Validação de dados
-requests==2.31.0          # HTTP client
-```
-
----
-
-## 🤝 Contribuindo
-
-1. Fork o projeto
-2. Crie uma branch (`git checkout -b feature/AmazingFeature`)
-3. Commit (`git commit -m 'Add AmazingFeature'`)
-4. Push (`git push origin feature/AmazingFeature`)
-5. Abra um Pull Request
-
----
-
-## 📞 Suporte
-
-- 📖 [Documentação Completa](./README_API.md)
-- 🐛 [GitHub Issues](https://github.com/pietrogmedeiros/scraping_match/issues)
-- 💬 [GitHub Discussions](https://github.com/pietrogmedeiros/scraping_match/discussions)
-
----
-
-## ⭐ Dê uma estrela!
-
-Se este projeto foi útil, considere dar uma ⭐
-
----
-
-<div align="center">
-
-### 🚀 Pronto para começar?
-
-[📖 Documentação](./README_API.md) | [🔧 n8n](./N8N_ENDPOINT.md) | [🌐 Deploy](./DEPLOYMENT_VERCEL.md)
-
 **Versão**: 1.0.0 | **Status**: ✅ Production Ready | **2025**
 
-Made with ❤️
+Feito com ❤️ por Pietro Medeiros
 
 </div>
