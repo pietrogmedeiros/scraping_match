@@ -9,6 +9,7 @@ from bs4 import BeautifulSoup
 import re
 import json
 from typing import Dict, List
+import cloudscraper
 
 
 def scrape_mercado_livre(url: str, capturar_screenshots: bool = False) -> Dict:
@@ -58,33 +59,18 @@ def scrape_mercado_livre(url: str, capturar_screenshots: bool = False) -> Dict:
             "DNT": "1"
         }
         
-        # Fazer requisição com retry
-        max_retries = 3
-        for tentativa in range(max_retries):
-            try:
-                response = requests.get(url, headers=headers, timeout=20, allow_redirects=True)
-                response.raise_for_status()
-                
-                # Se conseguiu, quebra o loop
-                if len(response.content) > 5000:  # Se tem conteúdo suficiente
-                    break
-                elif tentativa < max_retries - 1:
-                    # Se não tem conteúdo, tenta novamente
-                    print(f"[RETRY] Tentativa {tentativa + 1}/{max_retries} - Conteúdo pequeno, tentando novamente")
-                    logs.append(f"Retry {tentativa + 1}: Conteúdo pequeno ({len(response.content)} bytes), tentando novamente")
-                    import time
-                    time.sleep(2)  # Delay de 2 segundos
-                    continue
-                    
-            except Exception as e:
-                if tentativa < max_retries - 1:
-                    print(f"[RETRY] Tentativa {tentativa + 1}/{max_retries} falhou: {e}")
-                    logs.append(f"Retry {tentativa + 1} failed: {e}")
-                    import time
-                    time.sleep(2)
-                    continue
-                else:
-                    raise
+        # Fazer requisição com cloudscraper (burla CloudFlare/proteções)
+        try:
+            scraper = cloudscraper.create_scraper()
+            response = scraper.get(url, headers=headers, timeout=20, allow_redirects=True)
+            response.raise_for_status()
+            logs.append(f"CloudScraper: Conteúdo obtido ({len(response.content)} bytes)")
+        except Exception as e:
+            print(f"[CloudScraper failed] {e}, tentando com requests normal")
+            logs.append(f"CloudScraper falhou, usando requests: {e}")
+            # Fallback para requests normal
+            response = requests.get(url, headers=headers, timeout=20, allow_redirects=True)
+            response.raise_for_status()
         
         print(f"[OK] Status: {response.status_code}")
         print(f"[DEBUG] Content length: {len(response.content)} bytes")
