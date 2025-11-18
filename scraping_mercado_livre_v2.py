@@ -67,9 +67,9 @@ def scrape_mercado_livre(url, capturar_screenshots=True):
         driver.get(url)
         
         # Aguardar página carregar rapidamente
-        time.sleep(2)
+        time.sleep(1)
         
-        wait = WebDriverWait(driver, 10)
+        wait = WebDriverWait(driver, 5)
         
         # Aguardar título carregar
         try:
