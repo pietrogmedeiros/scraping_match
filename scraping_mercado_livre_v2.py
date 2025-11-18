@@ -50,9 +50,18 @@ def scrape_mercado_livre(url: str, capturar_screenshots: bool = False) -> Dict:
         response.raise_for_status()
         
         print(f"[OK] Status: {response.status_code}")
+        print(f"[DEBUG] Content length: {len(response.content)} bytes")
         
         # Parse HTML
         soup = BeautifulSoup(response.content, 'html.parser')
+        
+        # Verificar se tem conteúdo
+        page_text = soup.get_text()
+        print(f"[DEBUG] Page text length: {len(page_text)} caracteres")
+        
+        # Buscar títulos para debug
+        h1s = soup.find_all('h1')
+        print(f"[DEBUG] Total de h1s encontrados: {len(h1s)}")
         
         # ============================================
         # 1. EXTRAIR TÍTULO
