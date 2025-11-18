@@ -41,17 +41,50 @@ def scrape_mercado_livre(url: str, capturar_screenshots: bool = False) -> Dict:
         
         # Headers realistas para evitar bloqueio
         headers = {
-            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
-            "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
+            "Accept-Encoding": "gzip, deflate, br",
+            "Cache-Control": "max-age=0",
+            "Sec-Ch-Ua": '"Not A(Brand";v="99", "Google Chrome";v="131", "Chromium";v="131"',
+            "Sec-Ch-Ua-Mobile": "?0",
+            "Sec-Ch-Ua-Platform": '"Windows"',
+            "Sec-Fetch-Dest": "document",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Site": "none",
+            "Upgrade-Insecure-Requests": "1",
             "Referer": "https://www.mercadolivre.com.br/",
             "Connection": "keep-alive",
             "DNT": "1"
         }
         
-        # Fazer requisição
-        response = requests.get(url, headers=headers, timeout=15)
-        response.raise_for_status()
+        # Fazer requisição com retry
+        max_retries = 3
+        for tentativa in range(max_retries):
+            try:
+                response = requests.get(url, headers=headers, timeout=20, allow_redirects=True)
+                response.raise_for_status()
+                
+                # Se conseguiu, quebra o loop
+                if len(response.content) > 5000:  # Se tem conteúdo suficiente
+                    break
+                elif tentativa < max_retries - 1:
+                    # Se não tem conteúdo, tenta novamente
+                    print(f"[RETRY] Tentativa {tentativa + 1}/{max_retries} - Conteúdo pequeno, tentando novamente")
+                    logs.append(f"Retry {tentativa + 1}: Conteúdo pequeno ({len(response.content)} bytes), tentando novamente")
+                    import time
+                    time.sleep(2)  # Delay de 2 segundos
+                    continue
+                    
+            except Exception as e:
+                if tentativa < max_retries - 1:
+                    print(f"[RETRY] Tentativa {tentativa + 1}/{max_retries} falhou: {e}")
+                    logs.append(f"Retry {tentativa + 1} failed: {e}")
+                    import time
+                    time.sleep(2)
+                    continue
+                else:
+                    raise
         
         print(f"[OK] Status: {response.status_code}")
         print(f"[DEBUG] Content length: {len(response.content)} bytes")
@@ -74,6 +107,15 @@ def scrape_mercado_livre(url: str, capturar_screenshots: bool = False) -> Dict:
         
         logs.append(f"Page text length: {len(page_text)} caracteres")
         logs.append(f"H1 elements found: {len(h1s)}")
+        
+        # DEBUG: Retornar snippet do HTML
+        html_snippet = response.content[:500].decode('utf-8', errors='ignore')
+        logs.append(f"HTML snippet: {html_snippet}")
+        
+        # Se página muito pequena, pode ser bloqueio
+        if len(page_text) < 1000:
+            logs.append("⚠️ AVISO: Página retornou com conteúdo muito pequeno - pode estar bloqueada!")
+            logs.append(f"Content: {page_text[:200]}")
         
         # ============================================
         # 1. EXTRAIR TÍTULO
