@@ -13,13 +13,12 @@ from selenium.webdriver.chrome.service import Service
 import time
 import json
 
-def scrape_mercado_livre(url, capturar_screenshots=True):
+def scrape_mercado_livre(url):
     """
     Realiza scraping de um produto do Mercado Livre e extrai dados estruturados.
     
     Args:
         url (str): URL do produto no Mercado Livre
-        capturar_screenshots (bool): Parâmetro aceito mas ignorado por enquanto
         
     Returns:
         dict: Dicionário com os dados extraídos do produto
@@ -62,7 +61,8 @@ def scrape_mercado_livre(url, capturar_screenshots=True):
             titulo_element = wait.until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, "h1.ui-pdp-title"))
             )
-            dados_produto["titulo"] = titulo_element.text.strip()
+            titulo_text = titulo_element.text.strip() if titulo_element.text else "N/A"
+            dados_produto["titulo"] = titulo_text
             print(f"[OK] Título encontrado: {dados_produto['titulo'][:50]}...")
         except (TimeoutException, NoSuchElementException) as e:
             print(f"[AVISO] Não foi possível extrair o título: {e}")
@@ -86,7 +86,7 @@ def scrape_mercado_livre(url, capturar_screenshots=True):
                     bullets = driver.find_elements(By.CSS_SELECTOR, selector)
                     if bullets and len(bullets) > 0:
                         for bullet in bullets:
-                            text = bullet.text.strip()
+                            text = bullet.text.strip() if bullet.text else ""
                             if text and len(text) > 0:
                                 dados_produto["bullet_points"].append(text)
                         if dados_produto["bullet_points"]:
@@ -123,8 +123,8 @@ def scrape_mercado_livre(url, capturar_screenshots=True):
                                 # Tentar extrair chave e valor
                                 cells = row.find_elements(By.TAG_NAME, "td")
                                 if len(cells) >= 2:
-                                    chave = cells[0].text.strip()
-                                    valor = cells[1].text.strip()
+                                    chave = cells[0].text.strip() if cells[0].text else ""
+                                    valor = cells[1].text.strip() if cells[1].text else ""
                                     if chave and valor:
                                         dados_produto["caracteristicas"][chave] = valor
                                         specs_found = True
@@ -156,7 +156,7 @@ def scrape_mercado_livre(url, capturar_screenshots=True):
                 try:
                     cor_elements = driver.find_elements(By.CSS_SELECTOR, selector)
                     for element in cor_elements:
-                        text = element.text.strip()
+                        text = element.text.strip() if element.text else ""
                         if text and len(text) > 0 and len(text) < 50:  # Assumindo que cor tem texto curto
                             dados_produto["cor"] = text
                             print(f"[OK] Cor encontrada: {text}")
@@ -191,7 +191,7 @@ def scrape_mercado_livre(url, capturar_screenshots=True):
                         # Tentar extrair texto do iframe
                         try:
                             descricao_element = driver.find_element(By.CSS_SELECTOR, "body")
-                            descricao = descricao_element.text.strip()
+                            descricao = descricao_element.text.strip() if descricao_element.text else ""
                             if descricao and len(descricao) > 20:
                                 print(f"[OK] Descrição encontrada em iframe: {len(descricao)} caracteres")
                                 break
@@ -220,7 +220,7 @@ def scrape_mercado_livre(url, capturar_screenshots=True):
                     for selector in desc_selectors:
                         try:
                             desc_element = driver.find_element(By.CSS_SELECTOR, selector)
-                            text = desc_element.text.strip()
+                            text = desc_element.text.strip() if desc_element.text else ""
                             if text and len(text) > 20:
                                 descricao = text
                                 print(f"[OK] Descrição encontrada: {len(descricao)} caracteres")
