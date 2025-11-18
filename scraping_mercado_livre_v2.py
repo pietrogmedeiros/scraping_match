@@ -1,13 +1,11 @@
-import requests
-from bs4 import BeautifulSoup
+from playwright.sync_api import sync_playwright
 import json
 import random
-
-# Versão: 2.0 - BeautifulSoup (Fast)
+import time
 
 def scrape_mercado_livre(url, capturar_screenshots=True):
     """
-    Realiza scraping leve de um produto do Mercado Livre usando BeautifulSoup.
+    Realiza scraping de um produto do Mercado Livre usando Playwright (rápido e leve).
     """
     
     dados_produto = {
@@ -20,116 +18,112 @@ def scrape_mercado_livre(url, capturar_screenshots=True):
     }
     
     try:
-        # User-agents para não parecer bot
-        user_agents = [
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
-            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36"
-        ]
-        
-        headers = {
-            'User-Agent': random.choice(user_agents),
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            'Accept-Language': 'pt-BR,pt;q=0.9',
-            'Accept-Encoding': 'gzip, deflate',
-            'Connection': 'keep-alive',
-            'Upgrade-Insecure-Requests': '1'
-        }
-        
-        print(f"[INFO] Acessando URL: {url}")
-        
-        # Fazer requisição com timeout curto
-        response = requests.get(url, headers=headers, timeout=10)
-        response.raise_for_status()
-        
-        # Parse HTML
-        soup = BeautifulSoup(response.content, 'html.parser')
-        
-        # EXTRAIR TÍTULO
-        try:
-            titulo_elem = soup.find(['h1', 'h2'])
-            if titulo_elem:
-                titulo_text = titulo_elem.get_text(strip=True)
-                if titulo_text and len(titulo_text) > 5:
-                    dados_produto["titulo"] = titulo_text[:200]
-                    print(f"[OK] Título: {dados_produto['titulo'][:50]}...")
-        except Exception as e:
-            print(f"[AVISO] Erro ao extrair título: {e}")
-        
-        # EXTRAIR BULLET POINTS
-        try:
-            bullet_points = []
+        with sync_playwright() as p:
+            # Usar Chromium (mais leve que Chrome)
+            browser = p.chromium.launch(
+                args=["--disable-dev-shm-usage", "--no-sandbox"]
+            )
             
-            selectors = [
-                ('span', {'class': lambda x: x and 'highlight' in str(x).lower()}),
-                ('li', {}),
-                ('div', {'class': lambda x: x and 'bullet' in str(x).lower()})
+            # Criar contexto com user agent aleatório
+            user_agents = [
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+                "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36"
             ]
             
-            for tag, attrs in selectors:
-                elements = soup.find_all(tag, attrs, limit=20)
-                for elem in elements:
-                    text = elem.get_text(strip=True)
-                    if text and len(text) > 10 and len(text) < 300:
-                        bullet_points.append(text)
+            context = browser.new_context(
+                user_agent=random.choice(user_agents),
+                viewport={"width": 1920, "height": 1080}
+            )
+            
+            page = context.new_page()
+            
+            print(f"[INFO] Acessando URL: {url}")
+            page.goto(url, wait_until="domcontentloaded", timeout=15000)
+            
+            # Aguardar carregamento
+            time.sleep(1)
+            
+            # EXTRAIR TÍTULO
+            try:
+                titulo_elem = page.query_selector("h1")
+                if titulo_elem:
+                    titulo_text = titulo_elem.text_content()
+                    if titulo_text:
+                        dados_produto["titulo"] = titulo_text.strip()[:200]
+                        print(f"[OK] Título: {dados_produto['titulo'][:50]}...")
+            except Exception as e:
+                print(f"[AVISO] Erro ao extrair título: {e}")
+            
+            # EXTRAIR BULLET POINTS
+            try:
+                bullet_elements = page.query_selector_all("span[class*='highlight'], li[class*='bullet'], .ui-pdp-highlights li")
+                bullet_points = []
+                for elem in bullet_elements[:10]:
+                    text = elem.text_content()
+                    if text:
+                        clean_text = text.strip()
+                        if clean_text and len(clean_text) > 10 and len(clean_text) < 300:
+                            bullet_points.append(clean_text)
                 
-                if len(bullet_points) > 3:
-                    break
+                dados_produto["bullet_points"] = list(set(bullet_points))
+                if dados_produto["bullet_points"]:
+                    print(f"[OK] {len(dados_produto['bullet_points'])} bullet points encontrados")
+            except Exception as e:
+                print(f"[AVISO] Erro ao extrair bullet points: {e}")
             
-            dados_produto["bullet_points"] = list(set(bullet_points))[:10]
-            if dados_produto["bullet_points"]:
-                print(f"[OK] {len(dados_produto['bullet_points'])} bullet points encontrados")
-        except Exception as e:
-            print(f"[AVISO] Erro ao extrair bullet points: {e}")
-        
-        # EXTRAIR CARACTERÍSTICAS
-        try:
-            table = soup.find('table')
-            if table:
-                rows = table.find_all('tr')
-                for row in rows:
-                    cells = row.find_all('td')
+            # EXTRAIR CARACTERÍSTICAS
+            try:
+                table_rows = page.query_selector_all("table tr, div[class*='spec'] tr")
+                for row in table_rows:
+                    cells = row.query_selector_all("td")
                     if len(cells) >= 2:
-                        chave = cells[0].get_text(strip=True)
-                        valor = cells[1].get_text(strip=True)
-                        if chave and valor and len(chave) > 0 and len(valor) > 0:
-                            dados_produto["caracteristicas"][chave] = valor
+                        chave_text = cells[0].text_content()
+                        valor_text = cells[1].text_content()
+                        
+                        if chave_text and valor_text:
+                            chave = chave_text.strip()
+                            valor = valor_text.strip()
+                            if chave and valor:
+                                dados_produto["caracteristicas"][chave] = valor
+                
+                if dados_produto["caracteristicas"]:
+                    print(f"[OK] {len(dados_produto['caracteristicas'])} características encontradas")
+            except Exception as e:
+                print(f"[AVISO] Erro ao extrair características: {e}")
             
-            if dados_produto["caracteristicas"]:
-                print(f"[OK] {len(dados_produto['caracteristicas'])} características encontradas")
-        except Exception as e:
-            print(f"[AVISO] Erro ao extrair características: {e}")
-        
-        # EXTRAIR COR
-        try:
-            color_keywords = ['branco', 'preto', 'azul', 'vermelho', 'verde', 'amarelo', 'rosa', 'roxo', 'cinza', 'marrom', 'prata', 'ouro', 'white', 'black', 'blue', 'red', 'green']
+            # EXTRAIR COR
+            try:
+                color_keywords = ['branco', 'preto', 'azul', 'vermelho', 'verde', 'amarelo', 'rosa', 'roxo', 'cinza', 'marrom', 'prata', 'ouro']
+                color_elements = page.query_selector_all("span[class*='color'], span[class*='Color'], div[class*='color']")
+                
+                for elem in color_elements:
+                    text = elem.text_content()
+                    if text:
+                        clean_text = text.lower().strip()
+                        if any(keyword in clean_text for keyword in color_keywords) and len(text) < 50:
+                            dados_produto["cor"] = text.strip()
+                            print(f"[OK] Cor: {dados_produto['cor']}")
+                            break
+            except Exception as e:
+                print(f"[AVISO] Erro ao extrair cor: {e}")
             
-            for text_elem in soup.find_all(['span', 'div', 'p']):
-                text = text_elem.get_text(strip=True).lower()
-                if any(keyword in text for keyword in color_keywords) and len(text) < 50:
-                    dados_produto["cor"] = text_elem.get_text(strip=True)
-                    print(f"[OK] Cor: {dados_produto['cor']}")
-                    break
-        except Exception as e:
-            print(f"[AVISO] Erro ao extrair cor: {e}")
+            # EXTRAIR DESCRIÇÃO
+            try:
+                desc_elem = page.query_selector("div[class*='description'], section[class*='description'], article[class*='description']")
+                if desc_elem:
+                    desc_text = desc_elem.text_content()
+                    if desc_text:
+                        clean_text = desc_text.strip()
+                        if clean_text and len(clean_text) > 30:
+                            dados_produto["descricao"] = clean_text[:500]
+                            print(f"[OK] Descrição: {len(dados_produto['descricao'])} caracteres")
+            except Exception as e:
+                print(f"[AVISO] Erro ao extrair descrição: {e}")
+            
+            browser.close()
+            print("[INFO] Scraping concluído com sucesso!")
         
-        # EXTRAIR DESCRIÇÃO
-        try:
-            desc_elem = soup.find(['article', 'section', 'div'], {'class': lambda x: x and 'description' in str(x).lower()})
-            if desc_elem:
-                descricao_text = desc_elem.get_text(strip=True)
-                if descricao_text and len(descricao_text) > 30:
-                    dados_produto["descricao"] = descricao_text[:500]
-                    print(f"[OK] Descrição: {len(dados_produto['descricao'])} caracteres")
-        except Exception as e:
-            print(f"[AVISO] Erro ao extrair descrição: {e}")
-        
-        print("[INFO] Scraping concluído com sucesso!")
-        
-    except requests.Timeout:
-        print("[ERRO] Timeout ao acessar a página")
-    except requests.RequestException as e:
-        print(f"[ERRO] Erro na requisição: {e}")
     except Exception as e:
         print(f"[ERRO] Erro geral durante scraping: {e}")
     
