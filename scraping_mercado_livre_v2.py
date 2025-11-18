@@ -3,6 +3,8 @@ from bs4 import BeautifulSoup
 import json
 import random
 
+# Versão: 2.0 - BeautifulSoup (Fast)
+
 def scrape_mercado_livre(url, capturar_screenshots=True):
     """
     Realiza scraping leve de um produto do Mercado Livre usando BeautifulSoup.
