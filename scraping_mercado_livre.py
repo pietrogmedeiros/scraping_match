@@ -13,12 +13,13 @@ from selenium.webdriver.chrome.service import Service
 import time
 import json
 
-def scrape_mercado_livre(url):
+def scrape_mercado_livre(url, capturar_screenshots=True):
     """
     Realiza scraping de um produto do Mercado Livre e extrai dados estruturados.
     
     Args:
         url (str): URL do produto no Mercado Livre
+        capturar_screenshots (bool): Parâmetro aceito mas ignorado por enquanto
         
     Returns:
         dict: Dicionário com os dados extraídos do produto
