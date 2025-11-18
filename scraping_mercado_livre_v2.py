@@ -12,6 +12,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.chrome.service import Service
 import time
 import json
+import os
 
 def scrape_mercado_livre(url, capturar_screenshots=True):
     """
