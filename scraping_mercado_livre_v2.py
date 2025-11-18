@@ -23,17 +23,21 @@ def scrape_mercado_livre(url: str, capturar_screenshots: bool = False) -> Dict:
         Dict com dados extraídos: titulo, bullet_points, caracteristicas, cor, descricao
     """
     
+    logs = []  # Coletar logs para retornar
+    
     dados_produto = {
         "titulo": "N/A",
         "bullet_points": [],
         "caracteristicas": {},
         "cor": "N/A",
         "descricao": "N/A",
-        "screenshots": {}
+        "screenshots": {},
+        "debug_logs": []
     }
     
     try:
         print(f"[INFO] Acessando URL: {url}")
+        logs.append(f"Acessando URL: {url}")
         
         # Headers realistas para evitar bloqueio
         headers = {
@@ -51,6 +55,11 @@ def scrape_mercado_livre(url: str, capturar_screenshots: bool = False) -> Dict:
         
         print(f"[OK] Status: {response.status_code}")
         print(f"[DEBUG] Content length: {len(response.content)} bytes")
+        print(f"[DEBUG] Content-Type: {response.headers.get('content-type')}")
+        
+        logs.append(f"Status: {response.status_code}")
+        logs.append(f"Content-Length: {len(response.content)} bytes")
+        logs.append(f"Content-Type: {response.headers.get('content-type')}")
         
         # Parse HTML
         soup = BeautifulSoup(response.content, 'html.parser')
@@ -62,6 +71,9 @@ def scrape_mercado_livre(url: str, capturar_screenshots: bool = False) -> Dict:
         # Buscar títulos para debug
         h1s = soup.find_all('h1')
         print(f"[DEBUG] Total de h1s encontrados: {len(h1s)}")
+        
+        logs.append(f"Page text length: {len(page_text)} caracteres")
+        logs.append(f"H1 elements found: {len(h1s)}")
         
         # ============================================
         # 1. EXTRAIR TÍTULO
@@ -184,13 +196,19 @@ def scrape_mercado_livre(url: str, capturar_screenshots: bool = False) -> Dict:
         dados_produto["descricao"] = descricao
         
         print("[INFO] Scraping concluído com sucesso!")
+        logs.append("Scraping concluído com sucesso!")
         
     except requests.exceptions.RequestException as e:
         print(f"[ERRO] Erro na requisição HTTP: {e}")
+        logs.append(f"Erro HTTP: {e}")
     except Exception as e:
         print(f"[ERRO] Erro geral durante scraping: {e}")
+        logs.append(f"Erro geral: {e}")
         import traceback
         traceback.print_exc()
+    
+    # Adicionar logs à resposta
+    dados_produto["debug_logs"] = logs
     
     return dados_produto
 
