@@ -60,18 +60,14 @@ def scrape_mercado_livre(url, capturar_screenshots=True):
         service = Service(ChromeDriverManager().install())
         driver = webdriver.Chrome(service=service, options=chrome_options)
         
-        # Adicionar delay aleatório para parecer humano
-        time.sleep(random.uniform(1, 3))
+        # Adicionar delay mínimo para parecer humano
+        time.sleep(random.uniform(0.5, 1.5))
         
         print(f"[INFO] Acessando URL: {url}")
         driver.get(url)
         
-        # Aguardar página carregar completamente
-        time.sleep(random.uniform(3, 6))
-        
-        # Scroll para forçar carregamento de elementos
-        driver.execute_script("window.scrollBy(0, window.innerHeight);")
-        time.sleep(random.uniform(1, 2))
+        # Aguardar página carregar rapidamente
+        time.sleep(2)
         
         wait = WebDriverWait(driver, 10)
         
@@ -82,14 +78,6 @@ def scrape_mercado_livre(url, capturar_screenshots=True):
             )
         except:
             pass
-        
-        # Esperar carregamento completo
-        time.sleep(5)
-        
-        # Fazer scroll para forçar carregamento de elementos lazy
-        for _ in range(3):
-            driver.execute_script("window.scrollBy(0, window.innerHeight);")
-            time.sleep(1)
         
         # EXTRAIR TÍTULO
         try:
@@ -138,6 +126,8 @@ def scrape_mercado_livre(url, capturar_screenshots=True):
                     continue
         except Exception as e:
             print(f"[AVISO] Erro ao extrair bullet points: {e}")
+        
+        time.sleep(0.5)
         
         # EXTRAIR CARACTERÍSTICAS
         try:
