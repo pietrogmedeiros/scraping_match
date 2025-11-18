@@ -64,22 +64,24 @@ def scrape_mercado_livre(url, capturar_screenshots=True):
         # EXTRAIR BULLET POINTS
         try:
             bullet_selectors = [
-                "ul.andes-list li",
+                "span[class*='highlight']",
                 ".ui-pdp-highlights li",
-                ".ui-pdp-description ul li",
-                "li[role='listitem']"
+                "ul li",
+                "[class*='highlights'] li",
+                "[class*='bullet'] li",
+                "li[class*='highlight']"
             ]
             
             for selector in bullet_selectors:
                 try:
                     bullets = driver.find_elements(By.CSS_SELECTOR, selector)
-                    if bullets:
+                    if bullets and len(bullets) > 5:  # Só considera se houver vários
                         for bullet in bullets:
                             try:
                                 text = bullet.text
                                 if text:
                                     clean_text = text.strip()
-                                    if clean_text and len(clean_text) > 0:
+                                    if clean_text and len(clean_text) > 10 and len(clean_text) < 300:
                                         dados_produto["bullet_points"].append(clean_text)
                             except:
                                 continue
@@ -94,9 +96,11 @@ def scrape_mercado_livre(url, capturar_screenshots=True):
         # EXTRAIR CARACTERÍSTICAS
         try:
             spec_selectors = [
-                "table.andes-table tbody tr",
-                "div[class*='attribute-row']",
-                "div.ui-pdp-specs"
+                "table tbody tr",
+                "[class*='spec'] tr",
+                "[class*='attribute'] tr",
+                "tr[class*='row']",
+                ".andes-table tbody tr"
             ]
             
             for selector in spec_selectors:
@@ -105,7 +109,11 @@ def scrape_mercado_livre(url, capturar_screenshots=True):
                     if spec_rows:
                         for row in spec_rows:
                             try:
+                                # Tentar encontrar td ou th
                                 cells = row.find_elements(By.TAG_NAME, "td")
+                                if not cells:
+                                    cells = row.find_elements(By.TAG_NAME, "th")
+                                
                                 if len(cells) >= 2:
                                     chave_text = cells[0].text
                                     valor_text = cells[1].text
@@ -131,7 +139,11 @@ def scrape_mercado_livre(url, capturar_screenshots=True):
             cor_selectors = [
                 "span[class*='Color']",
                 "span[class*='color']",
-                "div[class*='attribute'] span"
+                "[class*='color'] span",
+                "[class*='Color'] span",
+                "button[class*='color']",
+                "div[class*='selector']",
+                "[class*='attribute'] span"
             ]
             
             for selector in cor_selectors:
@@ -142,9 +154,11 @@ def scrape_mercado_livre(url, capturar_screenshots=True):
                             text = element.text
                             if text:
                                 clean_text = text.strip()
-                                if clean_text and len(clean_text) > 1 and len(clean_text) < 50 and "%" not in clean_text:
-                                    dados_produto["cor"] = clean_text
-                                    break
+                                if clean_text and len(clean_text) > 1 and len(clean_text) < 50 and "%" not in clean_text and "$" not in clean_text:
+                                    # Filtrar por palavras comuns de cor
+                                    if any(word in clean_text.lower() for word in ['branco', 'preto', 'azul', 'vermelho', 'verde', 'amarelo', 'rosa', 'roxo', 'cinza', 'marrom', 'prata', 'ouro', 'white', 'black', 'blue', 'red', 'green', 'color', 'cor']):
+                                        dados_produto["cor"] = clean_text
+                                        break
                         except:
                             continue
                     
@@ -159,8 +173,13 @@ def scrape_mercado_livre(url, capturar_screenshots=True):
         try:
             desc_selectors = [
                 "div[class*='description']",
+                "[class*='Description']",
+                "section[class*='description']",
+                "article[class*='description']",
                 ".ui-pdp-description",
-                ".ui-pdp-long-description"
+                ".ui-pdp-long-description",
+                "[class*='long-description']",
+                "[class*='product-description']"
             ]
             
             for selector in desc_selectors:
@@ -171,7 +190,7 @@ def scrape_mercado_livre(url, capturar_screenshots=True):
                             text = element.text
                             if text:
                                 clean_text = text.strip()
-                                if clean_text and len(clean_text) > 20:
+                                if clean_text and len(clean_text) > 30:
                                     dados_produto["descricao"] = clean_text
                                     break
                         except:
