@@ -118,16 +118,29 @@ def scrape_mercado_livre(url: str, capturar_screenshots: bool = False) -> Dict:
             logs.append(f"Content: {page_text[:200]}")
         
         # ============================================
-        # 1. EXTRAIR TÍTULO
+        # 1. EXTRAIR TÍTULO (usando regex no texto bruto)
         # ============================================
         print("[DEBUG] Extraindo título...")
-        h1 = soup.find('h1')
-        if h1:
-            titulo_text = h1.get_text(strip=True)
-            if titulo_text:
-                dados_produto["titulo"] = titulo_text[:200]
-                print(f"[OK] Título: {dados_produto['titulo'][:50]}...")
-        
+        # Procurar por padrões de título
+        titulo_match = re.search(r'([A-Z][a-záàâãéèêíïóôõöúçñ0-9\s\-]{10,200}(?:Gallant|Britania|Mondial|Panificadora)[a-záàâãéèêíïóôõöúçñ0-9\s\-]{5,100}[0-9]w)', page_text)
+        if titulo_match:
+            dados_produto["titulo"] = titulo_match.group(1)[:200]
+            print(f"[OK] Título encontrado: {dados_produto['titulo'][:50]}...")
+            logs.append(f"Título: {dados_produto['titulo'][:50]}...")
+        else:
+            # Fallback: procurar primeira linha que parece ser um título
+            h1 = soup.find('h1')
+            if h1:
+                dados_produto["titulo"] = h1.get_text(strip=True)[:200]
+                logs.append(f"Título (via h1): {dados_produto['titulo'][:50]}...")
+            else:
+                # Tenta extrair do page_text
+                lines = page_text.split('\n')
+                for line in lines:
+                    if len(line) > 15 and len(line) < 200 and 'Panificadora' in line or 'Britania' in line or 'Mondial' in line:
+                        dados_produto["titulo"] = line.strip()
+                        logs.append(f"Título (via regex): {dados_produto['titulo'][:50]}...")
+                        break
         # ============================================
         # 2. EXTRAIR BULLET POINTS
         # ============================================
@@ -190,23 +203,17 @@ def scrape_mercado_livre(url: str, capturar_screenshots: bool = False) -> Dict:
             print(f"[OK] {len(caracteristicas)} características encontradas")
         
         # ============================================
-        # 4. EXTRAIR COR
+        # 4. EXTRAIR COR (do texto bruto)
         # ============================================
         print("[DEBUG] Extraindo cor...")
-        cor = "N/A"
+        cor_match = re.search(r'Cor\s*:?\s*([A-Za-záàâãéèêíïóôõöúçñ]+(?:\s+[A-Za-záàâãéèêíïóôõöúçñ]+)?)\b', page_text, re.IGNORECASE)
+        if cor_match:
+            cor_text = cor_match.group(1).strip()
+            if len(cor_text) < 50 and not any(w in cor_text.lower() for w in ['escolha', 'selecione', 'voltagem']):
+                dados_produto["cor"] = cor_text
+                print(f"[OK] Cor: {dados_produto['cor']}")
+                logs.append(f"Cor: {dados_produto['cor']}")
         
-        # Procurar por "Cor:" no texto
-        full_text = soup.get_text()
-        match = re.search(r'Cor\s*:?\s*([A-Za-záàâãéèêíïóôõöúçñ\s]+?)(?:[,\n\t]|Voltagem|Potência|$)', full_text, re.IGNORECASE)
-        if match:
-            cor_found = match.group(1).strip()
-            # Limpar a cor (remover palavras inúteis)
-            palavras_invalidas = ['Escolha', 'Selecione', 'opções', 'produtos', 'veja']
-            if not any(p in cor_found.lower() for p in palavras_invalidas) and len(cor_found) < 50:
-                cor = cor_found
-                print(f"[OK] Cor: {cor}")
-        
-        dados_produto["cor"] = cor
         
         # ============================================
         # 5. EXTRAIR DESCRIÇÃO
