@@ -1,22 +1,11 @@
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.chrome.options import Options
-from selenium.common.exceptions import (
-    TimeoutException,
-    NoSuchElementException,
-    StaleElementReferenceException
-)
-from webdriver_manager.chrome import ChromeDriverManager
-from selenium.webdriver.chrome.service import Service
-import time
+import requests
+from bs4 import BeautifulSoup
 import json
 import random
 
 def scrape_mercado_livre(url, capturar_screenshots=True):
     """
-    Realiza scraping seguro de um produto do Mercado Livre.
+    Realiza scraping leve de um produto do Mercado Livre usando BeautifulSoup.
     """
     
     dados_produto = {
@@ -28,235 +17,126 @@ def scrape_mercado_livre(url, capturar_screenshots=True):
         "screenshots": {}
     }
     
-    driver = None
     try:
-        # Configurar Chrome com anti-detecção
-        chrome_options = Options()
-        chrome_options.add_argument("--headless")
-        chrome_options.add_argument("--no-sandbox")
-        chrome_options.add_argument("--disable-dev-shm-usage")
-        chrome_options.add_argument("--disable-gpu")
-        chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-        chrome_options.add_argument("--disable-extensions")
-        chrome_options.add_argument("--disable-plugins")
-        chrome_options.add_argument("--disable-images")
-        
-        # User-Agent aleatório para evitar detecção
+        # User-agents para não parecer bot
         user_agents = [
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0",
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.1 Safari/605.1.15"
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36"
         ]
-        chrome_options.add_argument(f"user-agent={random.choice(user_agents)}")
         
-        chrome_options.add_argument("--start-maximized")
-        chrome_options.add_argument("--window-size=1920,1080")
-        chrome_options.add_argument("--disable-logging")
-        chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-        chrome_options.add_experimental_option('useAutomationExtension', False)
-        
-        service = Service(ChromeDriverManager().install())
-        driver = webdriver.Chrome(service=service, options=chrome_options)
-        
-        # Adicionar delay mínimo para parecer humano
-        time.sleep(random.uniform(0.5, 1.5))
+        headers = {
+            'User-Agent': random.choice(user_agents),
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'pt-BR,pt;q=0.9',
+            'Accept-Encoding': 'gzip, deflate',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1'
+        }
         
         print(f"[INFO] Acessando URL: {url}")
-        driver.get(url)
         
-        # Aguardar página carregar rapidamente
-        time.sleep(1)
+        # Fazer requisição com timeout curto
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
         
-        wait = WebDriverWait(driver, 5)
-        
-        # Aguardar título carregar
-        try:
-            wait.until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, "h1"))
-            )
-        except:
-            pass
+        # Parse HTML
+        soup = BeautifulSoup(response.content, 'html.parser')
         
         # EXTRAIR TÍTULO
         try:
-            titulo_selectors = ["h1", "h1.ui-pdp-title", "[class*='title']"]
-            for selector in titulo_selectors:
-                try:
-                    titulo_elements = driver.find_elements(By.CSS_SELECTOR, selector)
-                    if titulo_elements:
-                        titulo_text = titulo_elements[0].text
-                        if titulo_text and len(titulo_text) > 5:
-                            dados_produto["titulo"] = titulo_text.strip()
-                            break
-                except:
-                    continue
+            titulo_elem = soup.find(['h1', 'h2'])
+            if titulo_elem:
+                titulo_text = titulo_elem.get_text(strip=True)
+                if titulo_text and len(titulo_text) > 5:
+                    dados_produto["titulo"] = titulo_text[:200]
+                    print(f"[OK] Título: {dados_produto['titulo'][:50]}...")
         except Exception as e:
             print(f"[AVISO] Erro ao extrair título: {e}")
         
         # EXTRAIR BULLET POINTS
         try:
-            bullet_selectors = [
-                "span[class*='highlight']",
-                ".ui-pdp-highlights li",
-                "ul li",
-                "[class*='highlights'] li",
-                "[class*='bullet'] li",
-                "li[class*='highlight']"
+            bullet_points = []
+            
+            selectors = [
+                ('span', {'class': lambda x: x and 'highlight' in str(x).lower()}),
+                ('li', {}),
+                ('div', {'class': lambda x: x and 'bullet' in str(x).lower()})
             ]
             
-            for selector in bullet_selectors:
-                try:
-                    bullets = driver.find_elements(By.CSS_SELECTOR, selector)
-                    if bullets and len(bullets) > 5:  # Só considera se houver vários
-                        for bullet in bullets:
-                            try:
-                                text = bullet.text
-                                if text:
-                                    clean_text = text.strip()
-                                    if clean_text and len(clean_text) > 10 and len(clean_text) < 300:
-                                        dados_produto["bullet_points"].append(clean_text)
-                            except:
-                                continue
-                        
-                        if dados_produto["bullet_points"]:
-                            break
-                except:
-                    continue
+            for tag, attrs in selectors:
+                elements = soup.find_all(tag, attrs, limit=20)
+                for elem in elements:
+                    text = elem.get_text(strip=True)
+                    if text and len(text) > 10 and len(text) < 300:
+                        bullet_points.append(text)
+                
+                if len(bullet_points) > 3:
+                    break
+            
+            dados_produto["bullet_points"] = list(set(bullet_points))[:10]
+            if dados_produto["bullet_points"]:
+                print(f"[OK] {len(dados_produto['bullet_points'])} bullet points encontrados")
         except Exception as e:
             print(f"[AVISO] Erro ao extrair bullet points: {e}")
         
-        time.sleep(0.5)
-        
         # EXTRAIR CARACTERÍSTICAS
         try:
-            spec_selectors = [
-                "table tbody tr",
-                "[class*='spec'] tr",
-                "[class*='attribute'] tr",
-                "tr[class*='row']",
-                ".andes-table tbody tr"
-            ]
+            table = soup.find('table')
+            if table:
+                rows = table.find_all('tr')
+                for row in rows:
+                    cells = row.find_all('td')
+                    if len(cells) >= 2:
+                        chave = cells[0].get_text(strip=True)
+                        valor = cells[1].get_text(strip=True)
+                        if chave and valor and len(chave) > 0 and len(valor) > 0:
+                            dados_produto["caracteristicas"][chave] = valor
             
-            for selector in spec_selectors:
-                try:
-                    spec_rows = driver.find_elements(By.CSS_SELECTOR, selector)
-                    if spec_rows:
-                        for row in spec_rows:
-                            try:
-                                # Tentar encontrar td ou th
-                                cells = row.find_elements(By.TAG_NAME, "td")
-                                if not cells:
-                                    cells = row.find_elements(By.TAG_NAME, "th")
-                                
-                                if len(cells) >= 2:
-                                    chave_text = cells[0].text
-                                    valor_text = cells[1].text
-                                    
-                                    if chave_text and valor_text:
-                                        chave = chave_text.strip()
-                                        valor = valor_text.strip()
-                                        
-                                        if chave and valor and len(chave) > 0 and len(valor) > 0:
-                                            dados_produto["caracteristicas"][chave] = valor
-                            except:
-                                continue
-                        
-                        if dados_produto["caracteristicas"]:
-                            break
-                except:
-                    continue
+            if dados_produto["caracteristicas"]:
+                print(f"[OK] {len(dados_produto['caracteristicas'])} características encontradas")
         except Exception as e:
             print(f"[AVISO] Erro ao extrair características: {e}")
         
         # EXTRAIR COR
         try:
-            cor_selectors = [
-                "span[class*='Color']",
-                "span[class*='color']",
-                "[class*='color'] span",
-                "[class*='Color'] span",
-                "button[class*='color']",
-                "div[class*='selector']",
-                "[class*='attribute'] span"
-            ]
+            color_keywords = ['branco', 'preto', 'azul', 'vermelho', 'verde', 'amarelo', 'rosa', 'roxo', 'cinza', 'marrom', 'prata', 'ouro', 'white', 'black', 'blue', 'red', 'green']
             
-            for selector in cor_selectors:
-                try:
-                    cor_elements = driver.find_elements(By.CSS_SELECTOR, selector)
-                    for element in cor_elements:
-                        try:
-                            text = element.text
-                            if text:
-                                clean_text = text.strip()
-                                if clean_text and len(clean_text) > 1 and len(clean_text) < 50 and "%" not in clean_text and "$" not in clean_text:
-                                    # Filtrar por palavras comuns de cor
-                                    if any(word in clean_text.lower() for word in ['branco', 'preto', 'azul', 'vermelho', 'verde', 'amarelo', 'rosa', 'roxo', 'cinza', 'marrom', 'prata', 'ouro', 'white', 'black', 'blue', 'red', 'green', 'color', 'cor']):
-                                        dados_produto["cor"] = clean_text
-                                        break
-                        except:
-                            continue
-                    
-                    if dados_produto["cor"] != "N/A":
-                        break
-                except:
-                    continue
+            for text_elem in soup.find_all(['span', 'div', 'p']):
+                text = text_elem.get_text(strip=True).lower()
+                if any(keyword in text for keyword in color_keywords) and len(text) < 50:
+                    dados_produto["cor"] = text_elem.get_text(strip=True)
+                    print(f"[OK] Cor: {dados_produto['cor']}")
+                    break
         except Exception as e:
             print(f"[AVISO] Erro ao extrair cor: {e}")
         
         # EXTRAIR DESCRIÇÃO
         try:
-            desc_selectors = [
-                "div[class*='description']",
-                "[class*='Description']",
-                "section[class*='description']",
-                "article[class*='description']",
-                ".ui-pdp-description",
-                ".ui-pdp-long-description",
-                "[class*='long-description']",
-                "[class*='product-description']"
-            ]
-            
-            for selector in desc_selectors:
-                try:
-                    desc_elements = driver.find_elements(By.CSS_SELECTOR, selector)
-                    for element in desc_elements:
-                        try:
-                            text = element.text
-                            if text:
-                                clean_text = text.strip()
-                                if clean_text and len(clean_text) > 30:
-                                    dados_produto["descricao"] = clean_text
-                                    break
-                        except:
-                            continue
-                    
-                    if dados_produto["descricao"] != "N/A":
-                        break
-                except:
-                    continue
+            desc_elem = soup.find(['article', 'section', 'div'], {'class': lambda x: x and 'description' in str(x).lower()})
+            if desc_elem:
+                descricao_text = desc_elem.get_text(strip=True)
+                if descricao_text and len(descricao_text) > 30:
+                    dados_produto["descricao"] = descricao_text[:500]
+                    print(f"[OK] Descrição: {len(dados_produto['descricao'])} caracteres")
         except Exception as e:
             print(f"[AVISO] Erro ao extrair descrição: {e}")
         
         print("[INFO] Scraping concluído com sucesso!")
         
+    except requests.Timeout:
+        print("[ERRO] Timeout ao acessar a página")
+    except requests.RequestException as e:
+        print(f"[ERRO] Erro na requisição: {e}")
     except Exception as e:
         print(f"[ERRO] Erro geral durante scraping: {e}")
-    
-    finally:
-        if driver:
-            try:
-                driver.quit()
-            except:
-                pass
     
     return dados_produto
 
 
 def main():
     """Função principal para executar o scraping."""
-    url = "https://www.mercadolivre.com.br/purificador-de-agua-ibbl-edue-prata-bivolt-79073001/up/MLBU775324063"
+    url = "https://www.mercadolivre.com.br/panificadora-19-programas-gallant-600w-branca/p/MLB44589848"
     
     print("=" * 80)
     print("SCRAPING DE PRODUTO - MERCADO LIVRE")
