@@ -1,11 +1,26 @@
-from playwright.sync_api import sync_playwright
-import json
-import random
-import time
+"""
+Scraper para Mercado Livre - Versão 2.1 (Otimizada com requests + BeautifulSoup)
+Usa requests para carregar a página e BeautifulSoup para parsing
+Muito mais rápido e confiável que Playwright para Vercel
+"""
 
-def scrape_mercado_livre(url, capturar_screenshots=True):
+import requests
+from bs4 import BeautifulSoup
+import re
+import json
+from typing import Dict, List
+
+
+def scrape_mercado_livre(url: str, capturar_screenshots: bool = False) -> Dict:
     """
-    Realiza scraping de um produto do Mercado Livre usando Playwright (rápido e leve).
+    Realiza scraping de um produto do Mercado Livre.
+    
+    Args:
+        url: URL do produto no Mercado Livre
+        capturar_screenshots: Se deve capturar screenshots (não implementado)
+    
+    Returns:
+        Dict com dados extraídos: titulo, bullet_points, caracteristicas, cor, descricao
     """
     
     dados_produto = {
@@ -18,114 +33,155 @@ def scrape_mercado_livre(url, capturar_screenshots=True):
     }
     
     try:
-        with sync_playwright() as p:
-            # Usar Chromium (mais leve que Chrome)
-            browser = p.chromium.launch(
-                args=["--disable-dev-shm-usage", "--no-sandbox"]
-            )
-            
-            # Criar contexto com user agent aleatório
-            user_agents = [
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
-                "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36"
-            ]
-            
-            context = browser.new_context(
-                user_agent=random.choice(user_agents),
-                viewport={"width": 1920, "height": 1080}
-            )
-            
-            page = context.new_page()
-            
-            print(f"[INFO] Acessando URL: {url}")
-            page.goto(url, wait_until="domcontentloaded", timeout=15000)
-            
-            # Aguardar carregamento
-            time.sleep(1)
-            
-            # EXTRAIR TÍTULO
-            try:
-                titulo_elem = page.query_selector("h1")
-                if titulo_elem:
-                    titulo_text = titulo_elem.text_content()
-                    if titulo_text:
-                        dados_produto["titulo"] = titulo_text.strip()[:200]
-                        print(f"[OK] Título: {dados_produto['titulo'][:50]}...")
-            except Exception as e:
-                print(f"[AVISO] Erro ao extrair título: {e}")
-            
-            # EXTRAIR BULLET POINTS
-            try:
-                bullet_elements = page.query_selector_all("span[class*='highlight'], li[class*='bullet'], .ui-pdp-highlights li")
-                bullet_points = []
-                for elem in bullet_elements[:10]:
-                    text = elem.text_content()
-                    if text:
-                        clean_text = text.strip()
-                        if clean_text and len(clean_text) > 10 and len(clean_text) < 300:
-                            bullet_points.append(clean_text)
-                
-                dados_produto["bullet_points"] = list(set(bullet_points))
-                if dados_produto["bullet_points"]:
-                    print(f"[OK] {len(dados_produto['bullet_points'])} bullet points encontrados")
-            except Exception as e:
-                print(f"[AVISO] Erro ao extrair bullet points: {e}")
-            
-            # EXTRAIR CARACTERÍSTICAS
-            try:
-                table_rows = page.query_selector_all("table tr, div[class*='spec'] tr")
-                for row in table_rows:
-                    cells = row.query_selector_all("td")
-                    if len(cells) >= 2:
-                        chave_text = cells[0].text_content()
-                        valor_text = cells[1].text_content()
-                        
-                        if chave_text and valor_text:
-                            chave = chave_text.strip()
-                            valor = valor_text.strip()
-                            if chave and valor:
-                                dados_produto["caracteristicas"][chave] = valor
-                
-                if dados_produto["caracteristicas"]:
-                    print(f"[OK] {len(dados_produto['caracteristicas'])} características encontradas")
-            except Exception as e:
-                print(f"[AVISO] Erro ao extrair características: {e}")
-            
-            # EXTRAIR COR
-            try:
-                color_keywords = ['branco', 'preto', 'azul', 'vermelho', 'verde', 'amarelo', 'rosa', 'roxo', 'cinza', 'marrom', 'prata', 'ouro']
-                color_elements = page.query_selector_all("span[class*='color'], span[class*='Color'], div[class*='color']")
-                
-                for elem in color_elements:
-                    text = elem.text_content()
-                    if text:
-                        clean_text = text.lower().strip()
-                        if any(keyword in clean_text for keyword in color_keywords) and len(text) < 50:
-                            dados_produto["cor"] = text.strip()
-                            print(f"[OK] Cor: {dados_produto['cor']}")
-                            break
-            except Exception as e:
-                print(f"[AVISO] Erro ao extrair cor: {e}")
-            
-            # EXTRAIR DESCRIÇÃO
-            try:
-                desc_elem = page.query_selector("div[class*='description'], section[class*='description'], article[class*='description']")
-                if desc_elem:
-                    desc_text = desc_elem.text_content()
-                    if desc_text:
-                        clean_text = desc_text.strip()
-                        if clean_text and len(clean_text) > 30:
-                            dados_produto["descricao"] = clean_text[:500]
-                            print(f"[OK] Descrição: {len(dados_produto['descricao'])} caracteres")
-            except Exception as e:
-                print(f"[AVISO] Erro ao extrair descrição: {e}")
-            
-            browser.close()
-            print("[INFO] Scraping concluído com sucesso!")
+        print(f"[INFO] Acessando URL: {url}")
         
+        # Headers realistas para evitar bloqueio
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+            "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+            "Referer": "https://www.mercadolivre.com.br/",
+            "Connection": "keep-alive",
+            "DNT": "1"
+        }
+        
+        # Fazer requisição
+        response = requests.get(url, headers=headers, timeout=15)
+        response.raise_for_status()
+        
+        print(f"[OK] Status: {response.status_code}")
+        
+        # Parse HTML
+        soup = BeautifulSoup(response.content, 'html.parser')
+        
+        # ============================================
+        # 1. EXTRAIR TÍTULO
+        # ============================================
+        print("[DEBUG] Extraindo título...")
+        h1 = soup.find('h1')
+        if h1:
+            titulo_text = h1.get_text(strip=True)
+            if titulo_text:
+                dados_produto["titulo"] = titulo_text[:200]
+                print(f"[OK] Título: {dados_produto['titulo'][:50]}...")
+        
+        # ============================================
+        # 2. EXTRAIR BULLET POINTS
+        # ============================================
+        print("[DEBUG] Extraindo bullet points...")
+        bullet_points = []
+        
+        # Procurar por h2 "O que você precisa saber"
+        h2_bullets = soup.find('h2', string=re.compile('você precisa saber', re.I))
+        if h2_bullets:
+            # Próximo elemento sibling contém os bullets
+            container = h2_bullets.parent.find_next_sibling()
+            if container:
+                # Procurar ul com features-list
+                ul = container.find('ul', {'class': re.compile('features-list', re.I)})
+                if ul:
+                    lis = ul.find_all('li')
+                    print(f"[DEBUG] Encontrados {len(lis)} bullet points")
+                    
+                    for li in lis:
+                        text = li.get_text(strip=True)
+                        if text and len(text) > 10 and len(text) < 500:
+                            if text not in bullet_points:
+                                bullet_points.append(text)
+        
+        dados_produto["bullet_points"] = bullet_points
+        if bullet_points:
+            print(f"[OK] {len(bullet_points)} bullet points encontrados")
+        
+        # ============================================
+        # 3. EXTRAIR CARACTERÍSTICAS
+        # ============================================
+        print("[DEBUG] Extraindo características...")
+        caracteristicas = {}
+        
+        # Procurar por h2 "Características do produto"
+        h2_char = soup.find('h2', string=re.compile('Características', re.I))
+        if h2_char:
+            # Próximo elemento sibling contém as characteristics
+            container = h2_char.parent.find_next_sibling()
+            if container:
+                # Procurar divs com classe "key-value"
+                key_value_divs = container.find_all('div', {'class': re.compile('key-value', re.I)})
+                print(f"[DEBUG] Encontrados {len(key_value_divs)} pares chave-valor")
+                
+                for kv_div in key_value_divs:
+                    # Dentro tem spans ou p com a chave e valor
+                    spans = kv_div.find_all('span')
+                    if len(spans) >= 2:
+                        # Primeira span é a chave, segunda é o valor
+                        chave = spans[0].get_text(strip=True)
+                        valor = spans[1].get_text(strip=True)
+                        
+                        if chave and valor and len(chave) < 100 and len(valor) < 200:
+                            # Remover ':'  da chave se existir
+                            chave = chave.rstrip(':')
+                            caracteristicas[chave] = valor
+        
+        dados_produto["caracteristicas"] = caracteristicas
+        if caracteristicas:
+            print(f"[OK] {len(caracteristicas)} características encontradas")
+        
+        # ============================================
+        # 4. EXTRAIR COR
+        # ============================================
+        print("[DEBUG] Extraindo cor...")
+        cor = "N/A"
+        
+        # Procurar por "Cor:" no texto
+        full_text = soup.get_text()
+        match = re.search(r'Cor\s*:?\s*([A-Za-záàâãéèêíïóôõöúçñ\s]+?)(?:[,\n\t]|Voltagem|Potência|$)', full_text, re.IGNORECASE)
+        if match:
+            cor_found = match.group(1).strip()
+            # Limpar a cor (remover palavras inúteis)
+            palavras_invalidas = ['Escolha', 'Selecione', 'opções', 'produtos', 'veja']
+            if not any(p in cor_found.lower() for p in palavras_invalidas) and len(cor_found) < 50:
+                cor = cor_found
+                print(f"[OK] Cor: {cor}")
+        
+        dados_produto["cor"] = cor
+        
+        # ============================================
+        # 5. EXTRAIR DESCRIÇÃO
+        # ============================================
+        print("[DEBUG] Extraindo descrição...")
+        descricao = "N/A"
+        
+        # Procurar por h2 "Descrição"
+        h2_desc = soup.find('h2', string=re.compile('Descrição', re.I))
+        if h2_desc:
+            container = h2_desc.parent
+            
+            # Próximo elemento após h2
+            next_elem = container.find_next(['div', 'p', 'section'])
+            if next_elem:
+                desc_text = next_elem.get_text(strip=True)
+                if desc_text and len(desc_text) > 30:
+                    descricao = desc_text[:500]
+                    print(f"[OK] Descrição: {len(descricao)} caracteres")
+            
+            # Fallback: pegar todo o conteúdo da seção
+            if descricao == "N/A":
+                desc_text = container.get_text(strip=True)
+                if len(desc_text) > 100:
+                    # Remover o h2 do início
+                    desc_text = desc_text.replace("Descrição", "").strip()
+                    descricao = desc_text[:500]
+        
+        dados_produto["descricao"] = descricao
+        
+        print("[INFO] Scraping concluído com sucesso!")
+        
+    except requests.exceptions.RequestException as e:
+        print(f"[ERRO] Erro na requisição HTTP: {e}")
     except Exception as e:
         print(f"[ERRO] Erro geral durante scraping: {e}")
+        import traceback
+        traceback.print_exc()
     
     return dados_produto
 
@@ -135,7 +191,7 @@ def main():
     url = "https://www.mercadolivre.com.br/panificadora-19-programas-gallant-600w-branca/p/MLB44589848"
     
     print("=" * 80)
-    print("SCRAPING DE PRODUTO - MERCADO LIVRE")
+    print("SCRAPING DE PRODUTO - MERCADO LIVRE (v2.1 - Otimizada)")
     print("=" * 80)
     print()
     

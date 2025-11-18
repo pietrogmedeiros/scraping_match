@@ -156,10 +156,18 @@ async def scrape_produto(
         logger.info(f"Iniciando scraping de: {request.url}")
         
         # Executar scraping
-        dados = scrape_mercado_livre(
-            url=request.url,
-            capturar_screenshots=request.capturar_screenshots
-        )
+        try:
+            dados = scrape_mercado_livre(
+                url=request.url,
+                capturar_screenshots=request.capturar_screenshots
+            )
+        except TypeError as te:
+            logger.error(f"Erro de tipo ao chamar scrape_mercado_livre: {str(te)}")
+            return ScrapeResponse(
+                sucesso=False,
+                mensagem=f"Erro ao chamar função de scraping: {str(te)}",
+                timestamp=datetime.now().isoformat()
+            )
         
         # Converter caminhos de screenshots para URLs acessíveis
         if dados["screenshots"]:
