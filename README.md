@@ -6,7 +6,7 @@
 [![License](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)](LICENSE)
 [![Status](https://img.shields.io/badge/Status-Production%20Ready-brightgreen?style=flat-square)](https://github.com/pietrogmedeiros/scraping_match)
 
-> 🚀 **API poderosa para scraping automático de produtos do Mercado Livre com captura de screenshots, autenticação por token e suporte total a n8n**
+> 🚀 **API para scraping automático de produtos do Mercado Livre com captura de screenshots, autenticação por token e suporte total a n8n**
 
 ---
 
