@@ -12,6 +12,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.chrome.service import Service
 import time
 import json
+import random
 
 def scrape_mercado_livre(url, capturar_screenshots=True):
     """
@@ -29,37 +30,82 @@ def scrape_mercado_livre(url, capturar_screenshots=True):
     
     driver = None
     try:
-        # Configurar Chrome
+        # Configurar Chrome com anti-detecção
         chrome_options = Options()
         chrome_options.add_argument("--headless")
         chrome_options.add_argument("--no-sandbox")
         chrome_options.add_argument("--disable-dev-shm-usage")
         chrome_options.add_argument("--disable-gpu")
         chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-        chrome_options.add_argument("user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36")
+        chrome_options.add_argument("--disable-extensions")
+        chrome_options.add_argument("--disable-plugins")
+        chrome_options.add_argument("--disable-images")
+        
+        # User-Agent aleatório para evitar detecção
+        user_agents = [
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.1 Safari/605.1.15"
+        ]
+        chrome_options.add_argument(f"user-agent={random.choice(user_agents)}")
+        
         chrome_options.add_argument("--start-maximized")
         chrome_options.add_argument("--window-size=1920,1080")
+        chrome_options.add_argument("--disable-logging")
+        chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+        chrome_options.add_experimental_option('useAutomationExtension', False)
         
         service = Service(ChromeDriverManager().install())
         driver = webdriver.Chrome(service=service, options=chrome_options)
         
+        # Adicionar delay aleatório para parecer humano
+        time.sleep(random.uniform(1, 3))
+        
         print(f"[INFO] Acessando URL: {url}")
         driver.get(url)
         
+        # Aguardar página carregar completamente
+        time.sleep(random.uniform(3, 6))
+        
+        # Scroll para forçar carregamento de elementos
+        driver.execute_script("window.scrollBy(0, window.innerHeight);")
+        time.sleep(random.uniform(1, 2))
+        
         wait = WebDriverWait(driver, 10)
+        
+        # Aguardar título carregar
+        try:
+            wait.until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, "h1"))
+            )
+        except:
+            pass
+        
+        # Esperar carregamento completo
+        time.sleep(5)
+        
+        # Fazer scroll para forçar carregamento de elementos lazy
+        for _ in range(3):
+            driver.execute_script("window.scrollBy(0, window.innerHeight);")
+            time.sleep(1)
         
         # EXTRAIR TÍTULO
         try:
-            titulo_element = wait.until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, "h1.ui-pdp-title"))
-            )
-            titulo_text = titulo_element.text
-            if titulo_text:
-                dados_produto["titulo"] = titulo_text.strip()
+            titulo_selectors = ["h1", "h1.ui-pdp-title", "[class*='title']"]
+            for selector in titulo_selectors:
+                try:
+                    titulo_elements = driver.find_elements(By.CSS_SELECTOR, selector)
+                    if titulo_elements:
+                        titulo_text = titulo_elements[0].text
+                        if titulo_text and len(titulo_text) > 5:
+                            dados_produto["titulo"] = titulo_text.strip()
+                            break
+                except:
+                    continue
         except Exception as e:
             print(f"[AVISO] Erro ao extrair título: {e}")
-        
-        time.sleep(2)
         
         # EXTRAIR BULLET POINTS
         try:
