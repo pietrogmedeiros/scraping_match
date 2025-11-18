@@ -26,6 +26,8 @@ app = FastAPI(
 
 # Token de autenticação (armazenar em variável de ambiente)
 API_TOKEN = os.getenv("API_TOKEN", "seu_token_secreto_aqui")
+print(f"[DEBUG] API_TOKEN carregado: {API_TOKEN[:20]}..." if API_TOKEN else "[DEBUG] API_TOKEN não configurado")
+logger.info(f"API_TOKEN carregado com sucesso")
 
 # Modelo de requisição
 class ScrapeRequest(BaseModel):
