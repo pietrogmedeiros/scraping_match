@@ -23,7 +23,8 @@ def scrape_mercado_livre(url, capturar_screenshots=True):
         "bullet_points": [],
         "caracteristicas": {},
         "cor": "N/A",
-        "descricao": "N/A"
+        "descricao": "N/A",
+        "screenshots": {}
     }
     
     driver = None
